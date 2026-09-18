@@ -59,7 +59,14 @@ func ValidatePhone(phone string) error {
 
 // ValidateTimeSlot проверяет корректность временного слота
 func ValidateTimeSlot(timeSlot string) error {
-	validSlots := []string{"18:00", "19:00", "20:00", "21:00", "22:00", "23:00", "00:00"}
+	// Обновлено под beauty bot: слоты с 10:00 до 21:00
+	validSlots := []string{
+		"10:00", "11:00", "12:00", "13:00", "14:00", "15:00",
+		"16:00", "17:00", "18:00", "19:00", "20:00", "21:00",
+	}
+
+	// Убираем лишние пробелы перед проверкой
+	timeSlot = strings.TrimSpace(timeSlot)
 
 	for _, valid := range validSlots {
 		if timeSlot == valid {

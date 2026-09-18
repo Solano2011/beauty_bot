@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -96,6 +97,14 @@ func Run(token string, adminID int64, db *postgres.DB, webAppURL string) {
 				http.Error(w, "Invalid request format", http.StatusBadRequest)
 				return
 			}
+
+			// Очищаем все строковые поля от лишних пробелов
+			data.ServiceName = strings.TrimSpace(data.ServiceName)
+			data.Time = strings.TrimSpace(data.Time)
+			data.Date = strings.TrimSpace(data.Date)
+			data.Name = strings.TrimSpace(data.Name)
+			data.Phone = strings.TrimSpace(data.Phone)
+			data.Comment = strings.TrimSpace(data.Comment)
 
 			// КРИТИЧНО: Проверка подлинности запроса от Telegram WebApp
 			if data.InitData != "" {

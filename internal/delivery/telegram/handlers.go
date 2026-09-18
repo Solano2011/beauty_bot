@@ -1,0 +1,489 @@
+package telegram
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"strings"
+
+	"hookah-bot/internal/domain"
+
+	tele "gopkg.in/telebot.v3"
+)
+
+const (
+	ImgHeroUrl = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=900&auto=format&fit=crop&q=80"
+)
+
+type Handlers struct {
+	bookingService domain.BookingService
+	adminID        int64
+	bot            *tele.Bot
+}
+
+func NewHandlers(bs domain.BookingService, adminID int64, bot *tele.Bot) *Handlers {
+	return &Handlers{
+		bookingService: bs,
+		adminID:        adminID,
+		bot:            bot,
+	}
+}
+
+func (h *Handlers) InitRoutes(b *tele.Bot) {
+	b.Handle("/start", h.handleStart)
+	b.Handle("/admin", h.handleAdmin)
+
+	b.Handle(&BtnBackToMain, h.handleBackToMain)
+	b.Handle(&BtnBook, h.handleBookBtn)
+	b.Handle(&BtnMyBooking, h.handleMyBookingBtn)
+	b.Handle(&BtnCancelBooking, h.handleCancelBooking)
+	b.Handle(&BtnContacts, h.handleContactsBtn)
+
+	b.Handle(&BtnZone, h.handleZoneSelect)
+	b.Handle(&BtnTime, h.handleTimeSelect)
+
+	// Подтверждение замены брони
+	b.Handle(&BtnConfirmReplace, h.handleConfirmReplace)
+	b.Handle(&BtnKeepOldBooking, h.handleKeepOldBooking)
+
+	// Обработчик данных из Web App
+	b.Handle(tele.OnWebApp, h.handleWebApp)
+
+	b.Handle(&BtnAdminRefresh, h.handleAdminRefresh)
+	b.Handle(&BtnAdminResetAll, h.handleAdminResetAll)
+
+	b.Handle("/admin", h.handleAdminCommand)
+	b.Handle("\fadmin_all", h.handleAdminAll)
+	b.Handle("\fadmin_clear", h.handleAdminClear)
+
+}
+
+func (h *Handlers) isAdmin(userID int64) bool {
+	return h.adminID != 0 && userID == h.adminID
+}
+
+func (h *Handlers) handleStart(c tele.Context) error {
+	caption := fmt.Sprintf(
+		"Добро пожаловать в *SMOKE LOUNGE*, %s!\n\n"+
+			"Камерная атмосфера, авторские миксы и приватные зоны для идеального отдыха.\n\n"+
+			"Выберите действие в меню ниже:",
+		c.Sender().FirstName,
+	)
+
+	photo := &tele.Photo{File: tele.FromURL(ImgHeroUrl), Caption: caption}
+	return c.Send(photo, BuildMainMenu(), tele.ModeMarkdown)
+}
+
+func (h *Handlers) handleBackToMain(c tele.Context) error {
+	_ = c.Delete()
+	photo := &tele.Photo{File: tele.FromURL(ImgHeroUrl), Caption: "Главное меню *SMOKE LOUNGE*:"}
+	return c.Send(photo, BuildMainMenu(), tele.ModeMarkdown)
+}
+
+func (h *Handlers) handleBookBtn(c tele.Context) error {
+	_ = c.Delete()
+	text := " *Шаг 1 из 2: Выберите зал*\n\n" +
+		"• *Общий лаунж* — мягкие диваны, приглушенный свет, chillout-музыка.\n" +
+		"• *PS5 Lounge* — зона с PlayStation 5, топовыми играми и 4K ТВ.\n" +
+		"• *VIP-комната* — полная приватность, отдельная аудиосистема (до 8 гостей)."
+	return c.Send(text, BuildZonesMenu(), tele.ModeMarkdown)
+}
+
+func (h *Handlers) handleZoneSelect(c tele.Context) error {
+	zone := c.Data()
+	ctx := context.Background()
+
+	// Проверяем, есть ли уже активная бронь
+	existingBooking, err := h.bookingService.GetUserBooking(ctx, c.Sender().ID)
+	if err == nil && existingBooking.TimeSlot != "" {
+		// У пользователя уже есть активная бронь
+		_ = c.Delete()
+		text := fmt.Sprintf(
+			"⚠️ *У вас уже есть активная бронь:*\n\n"+
+				"📍 Зал: `%s`\n"+
+				"🪑 Стол: `%s`\n"+
+				"📅 Дата: `%s`\n"+
+				"⏰ Время: `%s`\n\n"+
+				"Хотите отменить предыдущую бронь и создать новую?",
+			existingBooking.Zone, existingBooking.Table, existingBooking.Date, existingBooking.TimeSlot,
+		)
+
+		// Сохраняем выбранную зону в черновик для последующего использования
+		_ = h.bookingService.StartBookingDraft(ctx, c.Sender().ID, zone)
+
+		return c.Send(text, BuildReplaceConfirmMenu(), tele.ModeMarkdown)
+	}
+
+	if err := h.bookingService.StartBookingDraft(ctx, c.Sender().ID, zone); err != nil {
+		return c.Send("Ошибка сохранения. Попробуйте еще раз.")
+	}
+
+	_ = c.Delete()
+
+	// Вызов Mini App для Общего лаунжа
+	if zone == "Общий лаунж" {
+		m := &tele.ReplyMarkup{}
+		baseURL := "https://hookah-test.ru/"
+
+		btnBook := m.WebApp("Забронировать стол", &tele.WebApp{URL: baseURL})
+		btnMenu := m.WebApp("Меню & Табачная карта", &tele.WebApp{URL: baseURL + "/?start=menu"})
+
+		m.Inline(
+			m.Row(btnBook),
+			m.Row(btnMenu, BtnMyBooking),
+			m.Row(BtnContacts),
+		)
+
+		return c.Send("Главное меню SMOKE LOUNGE:", m)
+	}
+
+	// Для VIP и PS5 стол один
+	_ = h.bookingService.SetBookingTable(ctx, c.Sender().ID, "Основной")
+	text := fmt.Sprintf(" *Шаг 2 из 2: Выберите время*\n\nВыбранный зал: `%s`", zone)
+	return c.Send(text, BuildTimeMenu(), tele.ModeMarkdown)
+}
+
+// Принимаем стол из Web App
+func (h *Handlers) handleWebApp(c tele.Context) error {
+	if c.Message().WebAppData == nil {
+		return nil
+	}
+
+	rawData := c.Message().WebAppData.Data
+
+	// Ожидаем строку вида "Стол 3|20:00"
+	parts := strings.Split(rawData, "|")
+	if len(parts) != 2 {
+		return c.Send("Ошибка: Неверный формат данных от Web App.")
+	}
+
+	table := parts[0]
+	timeSlot := parts[1]
+
+	ctx := context.Background()
+	userID := c.Sender().ID
+
+	log.Printf("🌐 [Web App] Получены данные от userID=%d: стол=%s, время=%s", userID, table, timeSlot)
+
+	// ВАЖНО: Проверяем и удаляем все старые подтвержденные брони перед созданием новой
+	existingBooking, err := h.bookingService.GetUserBooking(ctx, userID)
+	if err == nil && existingBooking.TimeSlot != "" {
+		log.Printf("⚠️ [Web App] У userID=%d найдена существующая бронь: зал=%s, стол=%s, время=%s",
+			userID, existingBooking.Zone, existingBooking.Table, existingBooking.TimeSlot)
+
+		if err := h.bookingService.CancelConfirmedBooking(ctx, userID); err != nil {
+			log.Printf("❌ [Web App] Ошибка удаления старой брони для userID=%d: %v", userID, err)
+			return c.Send("Ошибка при удалении старой брони. Попробуйте позже.")
+		}
+		log.Printf("✅ [Web App] Старая бронь userID=%d успешно удалена", userID)
+	} else {
+		log.Printf("ℹ️ [Web App] У userID=%d нет существующих броней", userID)
+	}
+
+	// 1. Сохраняем стол
+	if err := h.bookingService.SetBookingTable(ctx, userID, table); err != nil {
+		log.Printf("❌ [Web App] Ошибка сохранения стола для userID=%d: %v", userID, err)
+		return c.Send("Ошибка сохранения стола.")
+	}
+	log.Printf("✅ [Web App] Стол сохранён для userID=%d: %s", userID, table)
+
+	// 2. Формируем имя пользователя из данных Telegram
+	userName := c.Sender().FirstName
+	if c.Sender().LastName != "" {
+		userName += " " + c.Sender().LastName
+	}
+
+	// 3. СРАЗУ сохраняем время (финализируем бронь) с данными из Telegram
+	booking, err := h.bookingService.CompleteBookingDraft(ctx, userID, timeSlot, userName, "-")
+	if err != nil {
+		if errors.Is(err, domain.ErrTimeSlotTaken) {
+			log.Printf("⚠️ [Web App] Слот занят для userID=%d: %s на %s", userID, table, timeSlot)
+			return c.Send("Этот слот уже занят! Начните бронирование заново.")
+		}
+		log.Printf("❌ [Web App] Ошибка завершения брони для userID=%d: %v", userID, err)
+		return c.Send("Сессия истекла или произошла ошибка. Начните заново.")
+	}
+
+	log.Printf("✅ [Web App] Бронь успешно создана для userID=%d: зал=%s, стол=%s, время=%s",
+		userID, booking.Zone, booking.Table, booking.TimeSlot)
+
+	// Удаляем сообщение с кнопкой Web App
+	_ = h.bot.Delete(c.Message())
+
+	// Уведомляем админа
+	if h.adminID != 0 && h.bot != nil {
+		user := c.Sender()
+		usernameStr := "@" + user.Username
+		if user.Username == "" {
+			usernameStr = "без username"
+		}
+		notifyText := fmt.Sprintf(
+			" *НОВАЯ БРОНЬ В СИСТЕМЕ*\n"+
+				"━━━━━━━━━━━━━━━\n"+
+				" Гость: *%s* (%s)\n"+
+				" Зал: *%s* | *%s*\n"+
+				" Дата: *%s*\n"+
+				" Время: *%s*",
+			user.FirstName, usernameStr, booking.Zone, booking.Table, booking.Date, booking.TimeSlot,
+		)
+		go func(msg string) { _, _ = h.bot.Send(tele.ChatID(h.adminID), msg, tele.ModeMarkdown) }(notifyText)
+	}
+
+	// Подтверждаем пользователю
+	text := fmt.Sprintf(
+		" *Бронь успешно подтверждена!*\n"+
+			"━━━━━━━━━━━━━━━\n"+
+			" Зал: `%s` | Стол: `%s`\n"+
+			" Дата: `%s`\n"+
+			" Время: `%s`\n"+
+			" Статус: *Подтверждено*\n\n"+
+			"Ждем вас в гости!",
+		booking.Zone, booking.Table, booking.Date, booking.TimeSlot,
+	)
+
+	return c.Send(text, BuildMainMenu(), tele.ModeMarkdown)
+}
+
+func (h *Handlers) handleTimeSelect(c tele.Context) error {
+	timeSlot := c.Data()
+	ctx := context.Background()
+
+	// ВАЖНО: Удаляем все старые подтвержденные брони перед созданием новой
+	// Это защищает от повторного бронирования через классический интерфейс
+	_ = h.bookingService.CancelConfirmedBooking(ctx, c.Sender().ID)
+
+	// Передаем пустые имя/телефон для брони через классический интерфейс бота
+	booking, err := h.bookingService.CompleteBookingDraft(ctx, c.Sender().ID, timeSlot, c.Sender().FirstName, "-")
+	if err != nil {
+		if errors.Is(err, domain.ErrTimeSlotTaken) {
+			return c.Respond(&tele.CallbackResponse{Text: " Этот слот уже занят! Выберите другое время.", ShowAlert: true})
+		}
+		return c.Send("Сессия истекла. Начните выбор заново.")
+	}
+
+	if h.adminID != 0 && h.bot != nil {
+		user := c.Sender()
+		usernameStr := "@" + user.Username
+		if user.Username == "" {
+			usernameStr = "без username"
+		}
+		notifyText := fmt.Sprintf(
+			" *НОВАЯ БРОНЬ В СИСТЕМЕ*\n"+
+				"━━━━━━━━━━━━━━━\n"+
+				" Гость: *%s* (%s)\n"+
+				" Зал: *%s* | *%s*\n"+
+				" Дата: *%s*\n"+
+				" Время: *%s*",
+			user.FirstName, usernameStr, booking.Zone, booking.Table, booking.Date, booking.TimeSlot,
+		)
+		go func(msg string) { _, _ = h.bot.Send(tele.ChatID(h.adminID), msg, tele.ModeMarkdown) }(notifyText)
+	}
+
+	_ = c.Delete()
+	text := fmt.Sprintf(
+		" *Бронь успешно подтверждена!*\n"+
+			"━━━━━━━━━━━━━━━\n"+
+			" Зал: `%s` | Стол: `%s`\n"+
+			" Дата: `%s`\n"+
+			" Время: `%s`\n"+
+			" Статус: *Подтверждено*\n\n"+
+			"Ждем вас в гости!",
+		booking.Zone, booking.Table, booking.Date, booking.TimeSlot,
+	)
+
+	return c.Send(text, BuildMainMenu(), tele.ModeMarkdown)
+}
+
+func (h *Handlers) handleMyBookingBtn(c tele.Context) error {
+	ctx := context.Background()
+	b, err := h.bookingService.GetUserBooking(ctx, c.Sender().ID)
+
+	_ = c.Delete()
+	if err != nil || b.TimeSlot == "" {
+		m := &tele.ReplyMarkup{}
+		m.Inline(m.Row(BtnBackToMain))
+		return c.Send("У вас пока нет активных бронирований.", m)
+	}
+
+	m := &tele.ReplyMarkup{}
+	m.Inline(m.Row(BtnCancelBooking), m.Row(BtnBackToMain))
+
+	text := fmt.Sprintf(
+		" *Ваша бронь:*\n━━━━━━━━━━━━━━━\n Зал: `%s` | Стол: `%s`\n Дата: `%s`\n Время: `%s`\n",
+		b.Zone, b.Table, b.Date, b.TimeSlot,
+	)
+	return c.Send(text, m, tele.ModeMarkdown)
+}
+
+func (h *Handlers) handleCancelBooking(c tele.Context) error {
+	ctx := context.Background()
+	_ = h.bookingService.CancelBooking(ctx, c.Sender().ID)
+	_ = c.Delete()
+	return c.Send(" Бронь успешно аннулирована.", BuildMainMenu())
+}
+
+func (h *Handlers) handleContactsBtn(c tele.Context) error {
+	_ = c.Delete()
+	text := " *Smoke Lounge Central*\n\n *Адрес:* ул. Центральная, д. 15\n *Телефон:* `+7 (999) 000-00-00`"
+	return c.Send(text, BuildContactsMenu(), tele.ModeMarkdown)
+}
+
+func (h *Handlers) renderAdminDashboard(ctx context.Context) (string, error) {
+	bookings, err := h.bookingService.GetAllActiveBookings(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(bookings) == 0 {
+		return " *Панель администратора*\n\n На сегодня активных броней нет.", nil
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, " *Панель администратора*\nВсего активных броней: *%d*\n━━━━━━━━━━━━━━━\n", len(bookings))
+	for i, b := range bookings {
+		fmt.Fprintf(&sb, "*%d.* `%s` | `%s` | *%s* - *%s* (Гость: `%d`)\n", i+1, b.Date, b.TimeSlot, b.Zone, b.Table, b.UserID)
+	}
+	return sb.String(), nil
+}
+
+func (h *Handlers) handleAdmin(c tele.Context) error {
+	if !h.isAdmin(c.Sender().ID) {
+		return c.Send(" У вас нет прав администратора.")
+	}
+	text, _ := h.renderAdminDashboard(context.Background())
+	return c.Send(text, BuildAdminMenu(), tele.ModeMarkdown)
+}
+
+func (h *Handlers) handleAdminRefresh(c tele.Context) error {
+	if !h.isAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "Доступ запрещен", ShowAlert: true})
+	}
+	text, _ := h.renderAdminDashboard(context.Background())
+	_ = c.Delete()
+	return c.Send(text, BuildAdminMenu(), tele.ModeMarkdown)
+}
+
+func (h *Handlers) handleAdminResetAll(c tele.Context) error {
+	if !h.isAdmin(c.Sender().ID) {
+		return c.Respond(&tele.CallbackResponse{Text: "Доступ запрещен", ShowAlert: true})
+	}
+	ctx := context.Background()
+	_ = h.bookingService.ResetAllBookings(ctx)
+	_ = c.Delete()
+	return c.Send(" *Все брони успешно аннулированы.*", BuildAdminMenu(), tele.ModeMarkdown)
+}
+
+// 1. Сама команда /admin
+func (h *Handlers) handleAdminCommand(c tele.Context) error {
+	if c.Sender().ID != h.adminID {
+		return c.Send("У вас нет доступа к этой команде 🛑")
+	}
+
+	m := &tele.ReplyMarkup{}
+	btnAll := m.Data("📋 Посмотреть все брони", "admin_all")
+	btnClear := m.Data("🗑 Очистить базу", "admin_clear")
+
+	m.Inline(
+		m.Row(btnAll),
+		m.Row(btnClear),
+	)
+
+	return c.Send("🛠 *Панель управления баром*\nВыберите действие:", m, tele.ModeMarkdown)
+}
+
+// 2. Обработчик просмотра всех броней
+func (h *Handlers) handleAdminAll(c tele.Context) error {
+	ctx := context.Background()
+	bookings, err := h.bookingService.GetAllActiveBookings(ctx)
+	if err != nil {
+		return c.Send("Ошибка при получении базы")
+	}
+
+	if len(bookings) == 0 {
+		return c.Edit("База пуста. Пока никто не забронировал столик 🥲")
+	}
+
+	var sb strings.Builder
+	sb.WriteString("📋 *Список текущих броней:*\n\n")
+	for _, b := range bookings {
+		fmt.Fprintf(&sb, "👤 *Имя:* %s\n📞 *Телефон:* %s\n🆔 ID Гостя: `%d`\n📍 Зал: %s\n🪑 Стол: %s\n📅 Дата: %s\n⏰ Время: %s\n〰️〰️〰️〰️\n",
+			b.UserName, b.Phone, b.UserID, b.Zone, b.Table, b.Date, b.TimeSlot)
+	}
+
+	return c.Edit(sb.String(), tele.ModeMarkdown)
+}
+
+// 3. Обработчик очистки базы
+func (h *Handlers) handleAdminClear(c tele.Context) error {
+	ctx := context.Background()
+
+	if err := h.bookingService.ResetAllBookings(ctx); err != nil {
+		return c.Send("Ошибка при очистке базы")
+	}
+
+	return c.Edit("✅ *База успешно очищена!*\n\nВсе столы снова свободны. (Идеально для начала нового рабочего дня)", tele.ModeMarkdown)
+}
+
+// --- ОБРАБОТКА ЗАМЕНЫ БРОНИ ---
+
+func (h *Handlers) handleConfirmReplace(c tele.Context) error {
+	ctx := context.Background()
+	userID := c.Sender().ID
+
+	// 1. Отменяем старую подтвержденную бронь
+	err := h.bookingService.CancelConfirmedBooking(ctx, userID)
+	if err != nil {
+		log.Printf("❌ Ошибка отмены старой брони для userID=%d: %v", userID, err)
+		return c.Send("❌ Произошла ошибка при отмене старой брони. Обратитесь к администратору.")
+	}
+
+	// 2. Получаем черновик, чтобы извлечь данные
+	draft, err := h.bookingService.GetUserDraft(ctx, userID)
+	if err != nil {
+		log.Printf("❌ Ошибка получения черновика для userID=%d: %v", userID, err)
+		return c.Send("❌ Произошла ошибка при получении черновика. Попробуйте оформить бронь заново.")
+	}
+
+	// 3. Финализируем новую бронь из черновика с данными из него
+	booking, err := h.bookingService.CompleteBookingDraft(ctx, userID, draft.TimeSlot, draft.UserName, draft.Phone)
+	if err != nil {
+		log.Printf("❌ Ошибка завершения новой брони (черновика) для userID=%d: %v", userID, err)
+		return c.Send("❌ Произошла ошибка при создании новой брони. Попробуйте оформить ее заново.")
+	}
+
+	log.Printf("✅ Бронь успешно заменена для userID=%d", userID)
+
+	// 3. Уведомляем администратора
+	if h.adminID != 0 && h.bot != nil {
+		notifyText := fmt.Sprintf(
+			"🔔 *НОВАЯ БРОНЬ В СИСТЕМЕ (ЗАМЕНА)*\n"+
+				"━━━━━━━━━━━━━━━\n"+
+				"👤 *Имя:* %s\n"+
+				"📞 *Телефон:* %s\n"+
+				"🆔 Гость ID: `%d`\n"+
+				"📍 Зал: *%s* | Стол: *%s*\n"+
+				"📅 Дата: *%s*\n"+
+				"⏰ Время: *%s*",
+			booking.UserName, booking.Phone, userID, booking.Zone, booking.Table, booking.Date, booking.TimeSlot,
+		)
+		go func(msg string) { _, _ = h.bot.Send(tele.ChatID(h.adminID), msg, tele.ModeMarkdown) }(notifyText)
+	}
+
+	// 4. Редактируем сообщение пользователя, чтобы убрать инлайн-кнопки и показать успех
+	text := fmt.Sprintf(
+		"✅ *Бронь успешно заменена!*\n"+
+			"━━━━━━━━━━━━━━━\n"+
+			"📍 Зал: `%s` | Стол: `%s`\n"+
+			"📅 Дата: `%s`\n"+
+			"⏰ Время: `%s`\n"+
+			"✨ Статус: *Подтверждено*\n\n"+
+			"Ждем вас в гости!",
+		booking.Zone, booking.Table, booking.Date, booking.TimeSlot,
+	)
+
+	return c.EditOrSend(text, tele.ModeMarkdown)
+}
+
+func (h *Handlers) handleKeepOldBooking(c tele.Context) error {
+	// Пользователь передумал менять бронь.
+	return c.EditOrSend("👌 Вы отменили замену. Ваша старая бронь остается в силе!", tele.ModeMarkdown)
+}

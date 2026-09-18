@@ -5,7 +5,7 @@ import tele "gopkg.in/telebot.v3"
 var (
 	Menu = &tele.ReplyMarkup{}
 
-	// Главное меню
+	// Главное меню (Inline-кнопки под сообщением)
 	BtnMyBooking = Menu.Data("📅 Моя запись", "btn_my_booking")
 	BtnContacts  = Menu.Data("📍 Контакты", "btn_contacts")
 
@@ -36,13 +36,30 @@ func BuildMainMenu() *tele.ReplyMarkup {
 
 func BuildServicesMenu() *tele.ReplyMarkup {
 	m := &tele.ReplyMarkup{}
-	
+
 	// Пока одна услуга (захардкожена)
 	btnNails := m.Data("💅 Наращивание ногтей", "service", "Наращивание ногтей")
-	
+
 	m.Inline(
 		m.Row(btnNails),
 		m.Row(BtnBackToMain),
+	)
+	return m
+}
+
+// BuildWebAppReplyKeyboard создаёт Reply-клавиатуру с кнопкой WebApp
+// ВАЖНО: Reply-клавиатура нужна для работы tg.sendData() в WebApp!
+func BuildWebAppReplyKeyboard(webAppURL string) *tele.ReplyMarkup {
+	m := &tele.ReplyMarkup{
+		ResizeKeyboard: true, // Компактная клавиатура
+	}
+
+	btnWebApp := m.WebApp("📅 Выбрать дату и время", &tele.WebApp{URL: webAppURL})
+	btnBack := m.Text("◀️ Назад в меню")
+
+	m.Reply(
+		m.Row(btnWebApp),
+		m.Row(btnBack),
 	)
 	return m
 }

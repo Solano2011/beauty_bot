@@ -50,6 +50,9 @@ func (h *Handlers) InitRoutes(b *tele.Bot) {
 	// Обработчик данных из Web App
 	b.Handle(tele.OnWebApp, h.handleWebApp)
 
+	// Обработчик текстовой кнопки "Назад в меню" из Reply-клавиатуры
+	b.Handle("◀️ Назад в меню", h.handleBackToMain)
+
 	b.Handle(&BtnAdminRefresh, h.handleAdminRefresh)
 	b.Handle(&BtnAdminResetAll, h.handleAdminResetAll)
 }
@@ -111,18 +114,12 @@ func (h *Handlers) handleServiceSelect(c tele.Context) error {
 
 	_ = c.Delete()
 
-	// Открываем WebApp с передачей выбранной услуги через URL параметр
-	m := &tele.ReplyMarkup{}
+	// Открываем WebApp через REPLY-клавиатуру (не Inline!)
+	// Это критично для работы tg.sendData()
 	webAppURL := fmt.Sprintf("%s?service=%s", h.webAppBaseURL, strings.ReplaceAll(serviceName, " ", "+"))
-	btnBook := m.WebApp("📅 Выбрать дату и время", &tele.WebApp{URL: webAppURL})
-
-	m.Inline(
-		m.Row(btnBook),
-		m.Row(BtnBackToMain),
-	)
 
 	text := fmt.Sprintf("💅 *Выбрана услуга:*\n`%s`\n\nНажмите кнопку ниже, чтобы выбрать дату и время:", serviceName)
-	return c.Send(text, m, tele.ModeMarkdown)
+	return c.Send(text, BuildWebAppReplyKeyboard(webAppURL), tele.ModeMarkdown)
 }
 
 // Принимаем данные из Web App
@@ -336,18 +333,11 @@ func (h *Handlers) handleConfirmReplace(c tele.Context) error {
 
 	_ = c.Delete()
 
-	// 3. Открываем WebApp для выбора новой даты и времени
-	m := &tele.ReplyMarkup{}
+	// 3. Открываем WebApp через REPLY-клавиатуру (не Inline!)
 	webAppURL := fmt.Sprintf("%s?service=%s", h.webAppBaseURL, strings.ReplaceAll(draft.ServiceName, " ", "+"))
-	btnBook := m.WebApp("📅 Выбрать дату и время", &tele.WebApp{URL: webAppURL})
-
-	m.Inline(
-		m.Row(btnBook),
-		m.Row(BtnBackToMain),
-	)
 
 	text := fmt.Sprintf("✅ Старая запись отменена.\n\n💅 *Выбрана услуга:*\n`%s`\n\nНажмите кнопку ниже, чтобы выбрать дату и время:", draft.ServiceName)
-	return c.Send(text, m, tele.ModeMarkdown)
+	return c.Send(text, BuildWebAppReplyKeyboard(webAppURL), tele.ModeMarkdown)
 }
 
 func (h *Handlers) handleKeepOldBooking(c tele.Context) error {

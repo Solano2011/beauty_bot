@@ -18,8 +18,8 @@ import (
 	tele "gopkg.in/telebot.v3"
 )
 
-// Добавили db *postgres.DB третьим параметром
-func Run(token string, adminID int64, db *postgres.DB) {
+// Добавили db *postgres.DB третьим параметром и webAppURL четвертым
+func Run(token string, adminID int64, db *postgres.DB, webAppURL string) {
 	pref := tele.Settings{
 		Token:  token,
 		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
@@ -33,7 +33,7 @@ func Run(token string, adminID int64, db *postgres.DB) {
 	repo := postgres.NewBookingRepo(db)
 
 	bookingService := service.NewBookingService(repo)
-	handlers := telegram.NewHandlers(bookingService, adminID, b)
+	handlers := telegram.NewHandlers(bookingService, adminID, b, webAppURL)
 	handlers.InitRoutes(b)
 
 	log.Printf("Бот @%s успешно запущен! Admin ID: %d", b.Me.Username, adminID)
@@ -60,13 +60,14 @@ func Run(token string, adminID int64, db *postgres.DB) {
 			}
 
 			var data struct {
-				Table    string `json:"table"`
-				Time     string `json:"time"`
-				Date     string `json:"date"`
-				UserID   int64  `json:"userId"`
-				Name     string `json:"name"`
-				Phone    string `json:"phone"`
-				InitData string `json:"initData"` // Данные для проверки подписи
+				ServiceName string `json:"serviceName"`
+				Time        string `json:"time"`
+				Date        string `json:"date"`
+				UserID      int64  `json:"userId"`
+				Name        string `json:"name"`
+				Phone       string `json:"phone"`
+				Comment     string `json:"comment"`
+				InitData    string `json:"initData"`
 			}
 
 			if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
@@ -104,11 +105,6 @@ func Run(token string, adminID int64, db *postgres.DB) {
 				return
 			}
 
-			if err := validation.ValidateTableName(data.Table); err != nil {
-				http.Error(w, fmt.Sprintf("Invalid table: %v", err), http.StatusBadRequest)
-				return
-			}
-
 			if err := validation.ValidateTimeSlot(data.Time); err != nil {
 				http.Error(w, fmt.Sprintf("Invalid time slot: %v", err), http.StatusBadRequest)
 				return
@@ -121,34 +117,29 @@ func Run(token string, adminID int64, db *postgres.DB) {
 
 			ctx := context.Background()
 
-			log.Printf("🌐 [HTTP API] Получен запрос на бронь от userID=%d: стол=%s, дата=%s, время=%s", data.UserID, data.Table, data.Date, data.Time)
+			log.Printf("🌐 [HTTP API] Получен запрос на запись от userID=%d: услуга=%s, дата=%s, время=%s",
+				data.UserID, data.ServiceName, data.Date, data.Time)
 
-			// --- НОВАЯ ЛОГИКА ЗАМЕНЫ БРОНИ ---
+			// Проверяем, есть ли у пользователя существующая запись
 			existingBooking, err := bookingService.GetUserBooking(ctx, data.UserID)
 			if err == nil && existingBooking.TimeSlot != "" {
-				log.Printf("⚠️ [HTTP API] У userID=%d найдена существующая бронь: зал=%s, стол=%s, время=%s",
-					data.UserID, existingBooking.Zone, existingBooking.Table, existingBooking.TimeSlot)
+				log.Printf("⚠️ [HTTP API] У userID=%d найдена существующая запись: услуга=%s, дата=%s, время=%s",
+					data.UserID, existingBooking.ServiceName, existingBooking.Date, existingBooking.TimeSlot)
 
-				// НЕ удаляем бронь, а сохраняем новые данные в черновик
-				if err := bookingService.StartBookingDraft(ctx, data.UserID, "Общий лаунж"); err != nil {
+				// Сохраняем новые данные в черновик
+				if err := bookingService.StartBookingDraft(ctx, data.UserID, data.ServiceName); err != nil {
 					log.Printf("❌ [HTTP API] Ошибка создания черновика для userID=%d: %v", data.UserID, err)
 					http.Error(w, "Failed to create booking draft", http.StatusInternalServerError)
 					return
 				}
 
-				if err := bookingService.SetBookingTable(ctx, data.UserID, data.Table); err != nil {
-					log.Printf("❌ [HTTP API] Ошибка сохранения стола в черновик для userID=%d: %v", data.UserID, err)
-					http.Error(w, "Failed to save table to draft", http.StatusInternalServerError)
-					return
-				}
-
-				if err := repo.SetDraftDate(ctx, data.UserID, data.Date); err != nil {
+				if err := bookingService.SetBookingDate(ctx, data.UserID, data.Date); err != nil {
 					log.Printf("❌ [HTTP API] Ошибка сохранения даты в черновик для userID=%d: %v", data.UserID, err)
 					http.Error(w, "Failed to save date to draft", http.StatusInternalServerError)
 					return
 				}
 
-				if err := bookingService.SetDraftTimeAndContacts(ctx, data.UserID, data.Time, data.Name, data.Phone); err != nil {
+				if err := bookingService.SetDraftTimeAndContacts(ctx, data.UserID, data.Time, data.Name, data.Phone, data.Comment); err != nil {
 					log.Printf("❌ [HTTP API] Ошибка сохранения времени и контактов в черновик для userID=%d: %v", data.UserID, err)
 					http.Error(w, "Failed to save time and contacts to draft", http.StatusInternalServerError)
 					return
@@ -156,17 +147,16 @@ func Run(token string, adminID int64, db *postgres.DB) {
 
 				log.Printf("✅ [HTTP API] Черновик сохранён для userID=%d, ожидаем подтверждения", data.UserID)
 
-				// Отправляем пользователю сообщение с выбором в Telegram
+				// Отправляем пользователю сообщение с выбором
 				user := &tele.User{ID: data.UserID}
 				text := fmt.Sprintf(
-					"⚠️ *У вас уже есть активная бронь:*\n\n"+
-						"📍 Зал: `%s`\n"+
-						"🪑 Стол: `%s`\n"+
+					"⚠️ *У вас уже есть активная запись:*\n\n"+
+						"💅 Услуга: `%s`\n"+
 						"📅 Дата: `%s`\n"+
 						"⏰ Время: `%s`\n\n"+
-						"Хотите отменить предыдущую бронь и создать новую на `%s` (`%s`) в `%s`?",
-					existingBooking.Zone, existingBooking.Table, existingBooking.Date, existingBooking.TimeSlot,
-					data.Table, data.Date, data.Time,
+						"Хотите отменить предыдущую запись и создать новую на `%s` (`%s`) в `%s`?",
+					existingBooking.ServiceName, existingBooking.Date, existingBooking.TimeSlot,
+					data.ServiceName, data.Date, data.Time,
 				)
 
 				_, sendErr := b.Send(user, text, telegram.BuildReplaceConfirmMenu(), tele.ModeMarkdown)
@@ -174,89 +164,90 @@ func Run(token string, adminID int64, db *postgres.DB) {
 					log.Printf("⚠️ Ошибка при отправке сообщения выбора для userID=%d: %v", data.UserID, sendErr)
 				}
 
-				// Возвращаем статус фронтенду Web App, чтобы он понял, что нужно ждать подтверждения
 				w.WriteHeader(http.StatusOK)
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(map[string]string{"status": "pending_confirmation"})
 				return
 			}
 
-			log.Printf("ℹ️ [HTTP API] У userID=%d нет существующих броней, создаем новую", data.UserID)
+			log.Printf("ℹ️ [HTTP API] У userID=%d нет существующих записей, создаем новую", data.UserID)
 
-			// --- СТАНДАРТНАЯ ЛОГИКА (ЕСЛИ СТАРОЙ БРОНИ НЕТ) ---
-
-			// 0. СОЗДАЕМ ЧЕРНОВИК НА ЛЕТУ
-			if err := bookingService.StartBookingDraft(ctx, data.UserID, "Общий лаунж"); err != nil {
+			// Создаем новую запись
+			if err := bookingService.StartBookingDraft(ctx, data.UserID, data.ServiceName); err != nil {
 				log.Printf("❌ [HTTP API] Ошибка создания черновика для userID=%d: %v", data.UserID, err)
 				http.Error(w, "Failed to create booking draft", http.StatusInternalServerError)
 				return
 			}
-			log.Printf("✅ [HTTP API] Черновик создан для userID=%d", data.UserID)
 
-			// 1. СОХРАНЯЕМ СТОЛ В СЕРВИС
-			if err := bookingService.SetBookingTable(ctx, data.UserID, data.Table); err != nil {
-				log.Printf("❌ [HTTP API] Ошибка сохранения стола для userID=%d: %v", data.UserID, err)
-				http.Error(w, "Failed to save table", http.StatusInternalServerError)
-				return
-			}
-			log.Printf("✅ [HTTP API] Стол сохранён для userID=%d: %s", data.UserID, data.Table)
-
-			// 1.5. СОХРАНЯЕМ ДАТУ В ЧЕРНОВИК
-			if err := repo.SetDraftDate(ctx, data.UserID, data.Date); err != nil {
+			if err := bookingService.SetBookingDate(ctx, data.UserID, data.Date); err != nil {
 				log.Printf("❌ [HTTP API] Ошибка сохранения даты для userID=%d: %v", data.UserID, err)
 				http.Error(w, "Failed to save date", http.StatusInternalServerError)
 				return
 			}
-			log.Printf("✅ [HTTP API] Дата сохранена для userID=%d: %s", data.UserID, data.Date)
 
-			// 2. ФИНАЛИЗИРУЕМ БРОНЬ (сохраняем время)
-			booking, err := bookingService.CompleteBookingDraft(ctx, data.UserID, data.Time, data.Name, data.Phone)
+			booking, err := bookingService.CompleteBookingDraft(ctx, data.UserID, data.Time, data.Name, data.Phone, data.Comment)
 			if err != nil {
-				log.Printf("❌ [HTTP API] Ошибка завершения брони для userID=%d: %v", data.UserID, err)
+				log.Printf("❌ [HTTP API] Ошибка завершения записи для userID=%d: %v", data.UserID, err)
 				http.Error(w, "Booking conflict or error", http.StatusConflict)
 				return
 			}
 
-			log.Printf("✅ [HTTP API] Бронь успешно создана для userID=%d: зал=%s, стол=%s, время=%s",
-				data.UserID, booking.Zone, booking.Table, booking.TimeSlot)
+			log.Printf("✅ [HTTP API] Запись успешно создана для userID=%d: услуга=%s, дата=%s, время=%s",
+				data.UserID, booking.ServiceName, booking.Date, booking.TimeSlot)
 
-			// 3. Отправляем красивое сообщение пользователю
+			// Отправляем сообщение пользователю
 			user := &tele.User{ID: data.UserID}
-			text := fmt.Sprintf(
-				"✅ *Бронь успешно подтверждена!*\n"+
+			confirmText := fmt.Sprintf(
+				"✅ *Запись успешно подтверждена!*\n"+
 					"━━━━━━━━━━━━━━━\n"+
-					"📍 Зал: `%s` | Стол: `%s`\n"+
+					"💅 Услуга: `%s`\n"+
 					"📅 Дата: `%s`\n"+
 					"⏰ Время: `%s`\n"+
-					"✨ Статус: *Подтверждено*\n\n"+
-					"Ждем вас в гости!",
-				booking.Zone, booking.Table, booking.Date, booking.TimeSlot,
+					"👤 Имя: `%s`\n"+
+					"📞 Телефон: `%s`\n",
+				booking.ServiceName, booking.Date, booking.TimeSlot, booking.UserName, booking.Phone,
 			)
 
-			_, err = b.Send(user, text, telegram.BuildMainMenu(), tele.ModeMarkdown)
+			if booking.Comment != "" {
+				confirmText += fmt.Sprintf("💬 Комментарий: `%s`\n", booking.Comment)
+			}
+
+			confirmText += "\n✨ Статус: *Подтверждено*\n\nЖдем вас!"
+
+			_, err = b.Send(user, confirmText, telegram.BuildMainMenu(), tele.ModeMarkdown)
 			if err != nil {
 				log.Printf("⚠️ Ошибка при отправке сообщения: %v", err)
 			}
 
-			// 4. Уведомляем админа
+			// Уведомляем админа
 			if adminID != 0 {
-				notifyText := fmt.Sprintf(
-					"🔔 *НОВАЯ БРОНЬ В СИСТЕМЕ*\n"+
+				adminText := fmt.Sprintf(
+					"🔔 *НОВАЯ ЗАПИСЬ*\n"+
 						"━━━━━━━━━━━━━━━\n"+
 						"👤 *Имя:* %s\n"+
 						"📞 *Телефон:* %s\n"+
-						"🆔 Гость ID: `%d`\n"+
-						"📍 Зал: *%s* | Стол: *%s*\n"+
+						"🆔 ID: `%d`\n"+
+						"💅 Услуга: *%s*\n"+
 						"📅 Дата: *%s*\n"+
-						"⏰ Время: *%s*",
-					data.Name, data.Phone, data.UserID, booking.Zone, booking.Table, booking.Date, booking.TimeSlot,
+						"⏰ Время: *%s*\n",
+					booking.UserName, booking.Phone, booking.UserID,
+					booking.ServiceName, booking.Date, booking.TimeSlot,
 				)
-				_, _ = b.Send(&tele.User{ID: adminID}, notifyText, tele.ModeMarkdown)
+
+				if booking.Comment != "" {
+					adminText += fmt.Sprintf("💬 Комментарий: *%s*\n", booking.Comment)
+				}
+
+				admin := &tele.User{ID: adminID}
+				_, adminErr := b.Send(admin, adminText, tele.ModeMarkdown)
+				if adminErr != nil {
+					log.Printf("⚠️ Ошибка при отправке уведомления админу: %v", adminErr)
+				}
 			}
 
 			w.WriteHeader(http.StatusOK)
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+			json.NewEncoder(w).Encode(map[string]string{"status": "confirmed"})
 		})
 
 		// --- ЭНДПОИНТ ДЛЯ ПРОВЕРКИ ЗАНЯТОСТИ ---
@@ -276,15 +267,22 @@ func Run(token string, adminID int64, db *postgres.DB) {
 			}
 
 			date := r.URL.Query().Get("date")
+			serviceName := r.URL.Query().Get("service")
+
 			if date == "" {
 				http.Error(w, "Missing date parameter", http.StatusBadRequest)
 				return
 			}
 
+			if serviceName == "" {
+				http.Error(w, "Missing service parameter", http.StatusBadRequest)
+				return
+			}
+
 			ctx := context.Background()
-			takenSlots, err := repo.GetTakenTimeSlots(ctx, date)
+			takenSlots, err := repo.GetTakenTimeSlots(ctx, date, serviceName)
 			if err != nil {
-				log.Printf("❌ Ошибка получения занятых слотов для даты %s: %v", date, err)
+				log.Printf("❌ Ошибка получения занятых слотов для даты %s, услуги %s: %v", date, serviceName, err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}

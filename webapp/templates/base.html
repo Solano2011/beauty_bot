@@ -3,183 +3,347 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Выбор столика и Меню</title>
+    <title>Запись к мастеру</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <!-- Подключаем премиальный шрифт для меню -->
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
-    
-    <link rel="preload" as="image" href="img/chicken.jpg">
-    <link rel="preload" as="image" href="img/burger.jpg">
-    <link rel="preload" as="image" href="img/salmon.jpg">
-    <link rel="preload" as="image" href="img/lem1.jpg">
-    <link rel="preload" as="image" href="img/lem2.jpg">
-    <link rel="preload" as="image" href="img/lem3.jpg">
-    <link rel="preload" as="image" href="img/tea1.jpg">
-    <link rel="preload" as="image" href="img/tea2.jpg">
-    <link rel="preload" as="image" href="img/coffee1.jpg">
-    <link rel="preload" as="image" href="img/coffee2.jpg">
-    <link rel="preload" as="image" href="img/hookah1.jpg">
-    <link rel="preload" as="image" href="img/hookah2.jpg">
-    <link rel="preload" as="image" href="img/hookah3.jpg">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-        body { background-color: #1c1c1e; color: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 15px; padding-bottom: 100px; display: flex; flex-direction: column; align-items: center; user-select: none; }
-        h2 { margin-top: 5px; margin-bottom: 20px; font-weight: 600; text-align: center; }
-        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #2c2c2e; border-top: 1px solid #3a3a3c; display: flex; justify-content: space-around; padding: 10px 0; z-index: 100; }
-        .nav-item { display: flex; flex-direction: column; align-items: center; color: #888; font-size: 12px; font-weight: 500; cursor: pointer; }
-        .nav-item.active { color: #007aff; }
-        .nav-icon { font-size: 24px; margin-bottom: 4px; }
-        .section { width: 100%; max-width: 360px; display: none; }
-        .section.active { display: block; }
-        
-        /* КАРТА ЗАЛА */
-        .floor-plan { position: relative; width: 100%; height: 480px; background-color: #242426; border-radius: 15px; border: 2px solid #3a3a3c; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .room-element { position: absolute; border: 2px solid #555; display: flex; justify-content: center; align-items: center; font-size: 11px; font-weight: bold; color: #888; background-color: #2c2c2e; }
-        .wc { top: 15px; left: 15px; width: 40px; height: 30px; }
-        .entrance { bottom: 15px; left: 15px; width: 40px; height: 30px; border-color: #4CAF50; color: #4CAF50;}
-        .bar-vertical { bottom: 143px; left: 15px; width: 25px; height: 75px; border-bottom: none; z-index: 2; box-sizing: border-box; }
-        .bar-horizontal { bottom: 120px; left: 15px; width: 70px; height: 25px; box-sizing: border-box; z-index: 1; }
-        .bar-text { position: absolute; bottom: 95px; left: 15px; font-size: 10px; color: #e5b582; font-weight: bold; width: 70px; text-align: center; }
-        .window-line { position: absolute; bottom: 0; height: 6px; background-color: #5ac8fa; border-top-left-radius: 4px; border-top-right-radius: 4px; box-shadow: 0 0 8px #5ac8fa; }
-        .w1 { left: 90px; width: 60px; } .w2 { left: 180px; width: 60px; } .w3 { left: 270px; width: 60px; }
-        .table-group { position: absolute; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: all 0.3s ease; width: 65px; height: 45px; }
-        .table-core { background-color: #48484a; border: 2px solid #666; color: white; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 14px; transition: all 0.3s ease; width: 30px; height: 45px; border-radius: 6px; }
-        .chair { width: 12px; height: 35px; background-color: #4a3b32; border-radius: 5px; }
-        #t1 { top: 30px; left: 100px; } #t2 { top: 30px; left: 185px; } #t3 { top: 30px; left: 270px; }
-        .window-table { width: 65px; height: 45px; flex-direction: row; }
-        .window-table .table-core { width: 35px; height: 30px; }
-        .window-table .chair { width: 10px; height: 25px; }
-        #t4 { bottom: 20px; left: 88px; } #t5 { bottom: 20px; left: 178px; } #t6 { bottom: 20px; left: 268px; }
-        
-        .table-group.selected { transform: scale(1.15); z-index: 10; }
-        .table-core.selected { background-color: #007aff !important; border-color: #007aff !important; box-shadow: 0 0 15px rgba(0, 122, 255, 0.8) !important; color: white !important; }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: linear-gradient(135deg, #f8f3ed 0%, #fef9f3 100%);
+            color: #2a2a2a;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            padding: 20px 16px;
+            padding-bottom: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            user-select: none;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 420px;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ЗАГОЛОВОК С УСЛУГОЙ */
+        .service-header {
+            background: linear-gradient(135deg, #fef5f0 0%, #fff8f3 100%);
+            border: 2px solid #f4e4d7;
+            border-radius: 20px;
+            padding: 24px 20px;
+            margin-bottom: 28px;
+            text-align: center;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+        }
+
+        .service-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.1));
+        }
+
+        .service-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #2a2a2a;
+            margin-bottom: 6px;
+            letter-spacing: -0.3px;
+        }
+
+        .service-subtitle {
+            font-size: 14px;
+            color: #8a8a8a;
+            font-weight: 500;
+        }
+
+        /* СЕКЦИЯ */
+        .section {
+            margin-bottom: 28px;
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #6a6a6a;
+            margin-bottom: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         /* ВЫБОР ДАТЫ */
-        .date-picker { display: none; margin-top: 20px; width: 100%; animation: fadeIn 0.3s ease; }
-        .date-picker.active { display: block; }
-        .date-picker h3 { margin: 0 0 12px 0; font-size: 16px; text-align: center; color: #e5b582; }
-        .date-scroll { display: flex; gap: 10px; overflow-x: auto; padding: 5px 0; scrollbar-width: none; -ms-overflow-style: none; }
-        .date-scroll::-webkit-scrollbar { display: none; }
-        .date-chip { min-width: 90px; padding: 12px 8px; background-color: #2c2c2e; border: 2px solid #3a3a3c; border-radius: 8px; color: white; font-weight: bold; font-size: 13px; cursor: pointer; transition: 0.2s; text-align: center; display: flex; flex-direction: column; gap: 4px; }
-        .date-chip .date-day { font-size: 11px; color: #888; }
-        .date-chip .date-num { font-size: 16px; }
-        .date-chip.selected { background-color: #007aff; border-color: #007aff; box-shadow: 0 0 10px rgba(0, 122, 255, 0.5); }
-        .date-chip.selected .date-day { color: #fff; }
+        .date-scroll {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 4px 0;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .date-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+        .date-chip {
+            min-width: 90px;
+            padding: 16px 12px;
+            background: white;
+            border: 2px solid #e8e8e8;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .date-chip:active {
+            transform: scale(0.96);
+        }
+
+        .date-chip .date-day {
+            font-size: 11px;
+            color: #999;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .date-chip .date-num {
+            font-size: 18px;
+            font-weight: 700;
+            color: #2a2a2a;
+        }
+
+        .date-chip.selected {
+            background: linear-gradient(135deg, #d4a574 0%, #c89563 100%);
+            border-color: #c89563;
+            box-shadow: 0 4px 14px rgba(200, 149, 99, 0.35);
+        }
+
+        .date-chip.selected .date-day {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .date-chip.selected .date-num {
+            color: white;
+        }
 
         /* ВЫБОР ВРЕМЕНИ */
-        .time-picker { display: none; margin-top: 20px; width: 100%; animation: fadeIn 0.3s ease; }
-        .time-picker.active { display: block; }
-        .time-picker h3 { margin: 0 0 12px 0; font-size: 16px; text-align: center; color: #e5b582; }
-        .time-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
-        .time-chip { padding: 10px 16px; background-color: #2c2c2e; border: 2px solid #3a3a3c; border-radius: 8px; color: white; font-weight: bold; font-size: 14px; cursor: pointer; transition: 0.2s; }
-        .time-chip.selected { background-color: #007aff; border-color: #007aff; box-shadow: 0 0 10px rgba(0, 122, 255, 0.5); }
-        .time-chip.taken { background-color: #4a1515 !important; color: #ff6b6b !important; pointer-events: none; opacity: 0.5 !important; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        /* ФОРМА КОНТАКТОВ */
-        .input-field { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #444; background: #2c2c2e; color: white; box-sizing: border-box; font-size: 16px; }
-        .input-field::placeholder { color: #888; }
-        .input-field:focus { outline: none; border-color: #d4b886; }
-
-        /* --- ПРЕМИАЛЬНЫЙ ДИЗАЙН МЕНЮ --- */
-        #section-menu h2 {
-            font-family: 'Playfair Display', serif;
-            font-size: 32px;
-            color: #d4b886; 
-            font-weight: 600;
-            letter-spacing: 1px;
-            margin-bottom: 25px;
+        .time-picker {
+            display: none;
+            animation: fadeIn 0.3s ease;
         }
 
-        .menu-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 16px; 
-            padding: 0 10px;
-        }
-
-        .menu-card {
-            background: linear-gradient(135deg, #2a2a2f 0%, #1c1c1f 100%);
-            border: 1px solid rgba(212, 184, 134, 0.3);
-            border-radius: 12px;
-            padding: 25px 15px;
-            text-align: center;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
-            cursor: pointer;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }
-
-        .menu-card:active {
-            transform: scale(0.96);
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.8);
-        }
-
-        .menu-icon {
-            font-size: 55px; 
-            margin-bottom: 15px;
-            filter: drop-shadow(0px 10px 15px rgba(0, 0, 0, 0.5));
+        .time-picker.active {
             display: block;
         }
 
-        .menu-title {
-            font-family: 'Playfair Display', serif;
+        .time-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .time-chip {
+            padding: 14px 10px;
+            background: white;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            color: #2a2a2a;
             font-weight: 600;
-            font-size: 18px;
-            color: #ffffff;
-            margin-bottom: 10px;
-            letter-spacing: 0.5px;
-        }
-
-        .menu-price {
-            font-family: 'Playfair Display', serif;
-            display: inline-block;
-            background: transparent;
-            color: #d4b886; 
             font-size: 15px;
-            font-weight: 400;
-            text-transform: lowercase; 
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .time-chip:active {
+            transform: scale(0.96);
+        }
+
+        .time-chip.selected {
+            background: linear-gradient(135deg, #d4a574 0%, #c89563 100%);
+            border-color: #c89563;
+            color: white;
+            box-shadow: 0 4px 14px rgba(200, 149, 99, 0.35);
+        }
+
+        .time-chip.taken {
+            background: #f5f5f5 !important;
+            color: #bbb !important;
+            border-color: #e0e0e0 !important;
+            pointer-events: none;
+            opacity: 0.6 !important;
+            box-shadow: none !important;
+        }
+
+        /* ФОРМА КОНТАКТОВ */
+        .contact-form {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .contact-form.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #6a6a6a;
+            margin-bottom: 8px;
+            text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
-        /* МОДАЛЬНЫЕ ОКНА */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #1c1c1e; z-index: 200; display: none; flex-direction: column; overflow-y: auto; padding-bottom: 30px; animation: slideIn 0.3s forwards; }
-        .modal-overlay.active { display: flex; }
-        .modal-header { display: flex; align-items: center; padding: 15px 20px; background-color: #2c2c2e; position: sticky; top: 0; z-index: 201; border-bottom: 1px solid #3a3a3c; }
-        .back-btn { font-size: 24px; margin-right: 15px; cursor: pointer; color: #007aff; line-height: 1; }
-        .modal-title { font-size: 18px; font-weight: bold; }
-        .snack-list { padding: 15px; display: flex; flex-direction: column; gap: 20px; }
-        .snack-card { background-color: #2c2c2e; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
-        .snack-img { width: 100%; height: 220px; object-fit: cover; object-position: left center; display: block; }
-        .snack-info { padding: 15px; }
-        .snack-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; line-height: 1.2; }
-        .snack-desc { font-size: 14px; color: #b0b0b0; margin-bottom: 15px; line-height: 1.4; }
-        .snack-price { font-size: 18px; color: #e5b582; font-weight: bold; }
-        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .input-field {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 2px solid #e8e8e8;
+            background: white;
+            color: #2a2a2a;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .input-field::placeholder {
+            color: #bbb;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #d4a574;
+            box-shadow: 0 4px 14px rgba(212, 165, 116, 0.2);
+        }
+
+        textarea.input-field {
+            min-height: 100px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        /* КНОПКА ОТПРАВКИ */
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #d4a574 0%, #c89563 100%);
+            border: none;
+            border-radius: 14px;
+            color: white;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 6px 20px rgba(200, 149, 99, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .submit-btn:active {
+            transform: scale(0.97);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
-    
-    {{template "map" .}}
-    {{template "menu" .}}
-    {{template "modals" .}}
+    <div class="container">
+        <!-- ЗАГОЛОВОК С УСЛУГОЙ -->
+        <div class="service-header">
+            <div class="service-icon" id="serviceIcon">💅</div>
+            <div class="service-title" id="serviceTitle">Загрузка...</div>
+            <div class="service-subtitle">Выберите удобное время</div>
+        </div>
 
-    <div class="bottom-nav">
-        <div class="nav-item active" id="tab-map" onclick="switchTab('map')"><div class="nav-icon">🗺️</div><span>Зал</span></div>
-        <div class="nav-item" id="tab-menu" onclick="switchTab('menu')"><div class="nav-icon">🧾</div><span>Меню</span></div>
+        <!-- ВЫБОР ДАТЫ -->
+        <div class="section">
+            <div class="section-title">Выберите дату</div>
+            <div class="date-scroll" id="dateScroll"></div>
+        </div>
+
+        <!-- ВЫБОР ВРЕМЕНИ -->
+        <div class="section time-picker" id="timePicker">
+            <div class="section-title">Выберите время</div>
+            <div class="time-grid" id="timeGrid">
+                <div class="time-chip" onclick="selectTime('10:00', this)">10:00</div>
+                <div class="time-chip" onclick="selectTime('11:00', this)">11:00</div>
+                <div class="time-chip" onclick="selectTime('12:00', this)">12:00</div>
+                <div class="time-chip" onclick="selectTime('13:00', this)">13:00</div>
+                <div class="time-chip" onclick="selectTime('14:00', this)">14:00</div>
+                <div class="time-chip" onclick="selectTime('15:00', this)">15:00</div>
+                <div class="time-chip" onclick="selectTime('16:00', this)">16:00</div>
+                <div class="time-chip" onclick="selectTime('17:00', this)">17:00</div>
+                <div class="time-chip" onclick="selectTime('18:00', this)">18:00</div>
+                <div class="time-chip" onclick="selectTime('19:00', this)">19:00</div>
+                <div class="time-chip" onclick="selectTime('20:00', this)">20:00</div>
+                <div class="time-chip" onclick="selectTime('21:00', this)">21:00</div>
+            </div>
+        </div>
+
+        <!-- ФОРМА КОНТАКТОВ -->
+        <div class="section contact-form" id="contactForm">
+            <div class="section-title">Контактные данные</div>
+
+            <div class="form-group">
+                <label class="form-label" for="userName">Ваше имя</label>
+                <input type="text" id="userName" class="input-field" placeholder="Например, Мария">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="userPhone">Номер телефона</label>
+                <input type="tel" id="userPhone" class="input-field" placeholder="+7 (999) 123-45-67">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="userComment">Комментарий мастеру</label>
+                <textarea id="userComment" class="input-field" placeholder="Напишите пожелания или особые запросы..."></textarea>
+            </div>
+
+            <button class="submit-btn" id="submitBtn" onclick="submitBooking()">Записаться</button>
+        </div>
     </div>
 
     <script>
         let tg = window.Telegram.WebApp;
         tg.expand();
 
-        let selectedTableName = "";
+        let selectedServiceName = "";
         let selectedTime = "";
         let selectedDate = "";
 
         window.onload = function() {
+            // Получаем название услуги из URL
             const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('start') === 'menu') switchTab('menu');
+            selectedServiceName = urlParams.get('service') || 'Услуга';
+
+            document.getElementById('serviceTitle').innerText = selectedServiceName;
+
+            // Генерируем даты
             generateDateButtons();
         };
 
@@ -213,6 +377,9 @@
                 String(today.getMonth() + 1).padStart(2, '0') + '-' +
                 String(today.getDate()).padStart(2, '0');
             selectedDate = todayStr;
+
+            // Загружаем доступность слотов
+            updateTimeAvailability();
         }
 
         function selectDate(dateStr, element) {
@@ -220,190 +387,95 @@
             document.querySelectorAll('.date-chip').forEach(c => c.classList.remove('selected'));
             element.classList.add('selected');
 
-            // Если стол уже выбран, обновляем доступность времени
-            if (selectedTableName) {
-                updateTimeAvailability();
-            }
-        }
-
-        function getZoneForTable(tableName) {
-            // Все столы в одной зоне "Общий лаунж"
-            return "Общий лаунж";
-        }
-
-        function getTableKey(tableName) {
-            // Формируем ключ в формате "zone_table" для API
-            const zone = getZoneForTable(tableName);
-            return zone + "_" + tableName;
-        }
-
-        function switchTab(tab) {
-            document.getElementById('section-map').classList.remove('active');
-            document.getElementById('section-menu').classList.remove('active');
-            document.getElementById('tab-map').classList.remove('active');
-            document.getElementById('tab-menu').classList.remove('active');
-            document.getElementById('section-' + tab).classList.add('active');
-            document.getElementById('tab-' + tab).classList.add('active');
-            
-            closeSnacks(); 
-            closeLemonades();
-            closeDrinks();
-            closeHookahs();
-            
-            tg.MainButton.hide();
-        }
-
-        function openHookahs() { document.getElementById('hookahs-modal').classList.add('active'); }
-        function closeHookahs() { document.getElementById('hookahs-modal').classList.remove('active'); }
-        function openSnacks() { document.getElementById('snacks-modal').classList.add('active'); }
-        function closeSnacks() { document.getElementById('snacks-modal').classList.remove('active'); }
-        function openLemonades() { document.getElementById('lemonades-modal').classList.add('active'); }
-        function closeLemonades() { document.getElementById('lemonades-modal').classList.remove('active'); }
-        function openDrinks() { document.getElementById('drinks-modal').classList.add('active'); }
-        function closeDrinks() { document.getElementById('drinks-modal').classList.remove('active'); }
-
-        function selectTable(tableName, element) {
-            let contactForm = document.getElementById('contactForm');
-            let timePicker = document.getElementById('timePicker');
-            let datePicker = document.getElementById('datePicker');
-
-            let core = element.querySelector('.table-core');
-            let isAlreadySelected = element.classList.contains('selected') || (core && core.classList.contains('selected'));
-
-            // Жестко сбрасываем подсветку со ВСЕХ столов и ядер на странице
-            document.querySelectorAll('.table-group').forEach(g => g.classList.remove('selected'));
-            document.querySelectorAll('.table-core').forEach(c => c.classList.remove('selected'));
-
-            // Если кликнули повторно на тот же стол — отменяем выбор
-            if (isAlreadySelected) {
-                selectedTableName = "";
-                selectedTime = "";
-                if (timePicker) timePicker.style.display = 'none';
-                if (datePicker) datePicker.style.display = 'none';
-                if (contactForm) contactForm.style.display = 'none';
-                tg.MainButton.hide();
-                return;
-            }
-
-            // Подсвечиваем только выбранный стол и его ядро
-            element.classList.add('selected');
-            if (core) core.classList.add('selected');
-
-            selectedTableName = tableName;
-
-            if (contactForm) contactForm.style.display = 'none';
-            tg.MainButton.hide();
+            // Сбрасываем выбор времени и формы
             selectedTime = "";
+            document.querySelectorAll('.time-chip').forEach(c => c.classList.remove('selected'));
+            document.getElementById('contactForm').classList.remove('active');
 
-            // Показываем выбор даты
-            if (datePicker) datePicker.style.display = 'block';
-
-            // Обновляем доступность времени для выбранной даты
+            // Обновляем доступность времени
             updateTimeAvailability();
         }
 
         function updateTimeAvailability() {
-            let timePicker = document.getElementById('timePicker');
+            if (!selectedDate || !selectedServiceName) return;
 
-            if (!selectedDate) {
-                if (timePicker) timePicker.style.display = 'none';
-                return;
-            }
+            const timePicker = document.getElementById('timePicker');
+            timePicker.classList.add('active');
 
-            fetch('/api/availability?date=' + selectedDate)
+            // Запрос к /api/slots для получения занятых слотов
+            fetch(`/api/slots?date=${selectedDate}&service=${encodeURIComponent(selectedServiceName)}`)
                 .then(response => response.json())
                 .then(data => {
-                    let tableKey = getTableKey(selectedTableName);
-                    let takenTimes = data[tableKey] || [];
+                    const takenTimes = data.takenSlots || [];
 
                     document.querySelectorAll('.time-chip').forEach(chip => {
-                        let time = chip.innerText.trim();
+                        const time = chip.innerText.trim();
                         chip.classList.remove('taken', 'selected');
 
                         if (takenTimes.includes(time)) {
                             chip.classList.add('taken');
-                        } else {
-                            chip.style.backgroundColor = '';
-                            chip.style.color = '';
-                            chip.style.pointerEvents = 'auto';
-                            chip.style.opacity = '1';
                         }
                     });
-
-                    if (timePicker) timePicker.style.display = 'block';
                 })
                 .catch(err => {
                     console.error("Ошибка получения доступности:", err);
-                    tg.showAlert("Не удалось проверить занятость столов");
                 });
         }
 
         function selectTime(time, element) {
+            // Проверяем, не занят ли слот
+            if (element.classList.contains('taken')) return;
+
             selectedTime = time;
             document.querySelectorAll('.time-chip').forEach(c => c.classList.remove('selected'));
             element.classList.add('selected');
-            
-            let contactForm = document.getElementById('contactForm');
-            if (contactForm) contactForm.style.display = 'block';
-            
-            tg.MainButton.text = ("ЗАБРОНИРОВАТЬ НА " + time).toUpperCase();
-            tg.MainButton.color = "#d4b886";
-            tg.MainButton.textColor = "#1c1c1e";
-            tg.MainButton.show();
-            
+
+            // Показываем форму
+            const contactForm = document.getElementById('contactForm');
+            contactForm.classList.add('active');
+
+            // Плавно прокручиваем к форме
             setTimeout(() => {
-                if (contactForm) contactForm.scrollIntoView({ behavior: 'smooth' });
-            }, 100);
+                contactForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 150);
         }
 
-        tg.onEvent('mainButtonClicked', function(){
+        function submitBooking() {
             const nameEl = document.getElementById('userName');
             const phoneEl = document.getElementById('userPhone');
+            const commentEl = document.getElementById('userComment');
 
             const name = nameEl ? nameEl.value.trim() : "";
             const phone = phoneEl ? phoneEl.value.trim() : "";
+            const comment = commentEl ? commentEl.value.trim() : "";
 
             if (!name || !phone) {
                 tg.showAlert("Пожалуйста, заполните имя и телефон!");
                 return;
             }
 
-            let userId = tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : 0;
-            let username = tg.initDataUnsafe.user ? tg.initDataUnsafe.user.username : "";
+            if (!selectedTime || !selectedDate) {
+                tg.showAlert("Выберите дату и время!");
+                return;
+            }
 
-            tg.MainButton.showProgress();
+            const userId = tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : 0;
+            const initData = tg.initData;
 
-            let payload = {
-                table: selectedTableName,
-                time: selectedTime,
+            const payload = {
+                serviceName: selectedServiceName,
                 date: selectedDate,
+                time: selectedTime,
                 userId: userId,
-                username: username,
                 name: name,
                 phone: phone,
-                initData: tg.initData  // КРИТИЧНО: Отправляем initData для проверки подписи
+                comment: comment,
+                initData: initData
             };
 
-            fetch('/api/book', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }).then(response => {
-                tg.MainButton.hideProgress();
-                if (response.ok) {
-                    tg.close();
-                } else if (response.status === 401) {
-                    tg.showAlert("Ошибка авторизации. Перезапустите приложение.");
-                } else if (response.status === 429) {
-                    tg.showAlert("Слишком много запросов. Подождите немного.");
-                } else {
-                    tg.showAlert("Ошибка бронирования на сервере");
-                }
-            }).catch(() => {
-                tg.MainButton.hideProgress();
-                tg.showAlert("Ошибка соединения с сервером");
-            });
-        });
+            // Отправляем данные через Telegram WebApp API
+            tg.sendData(JSON.stringify(payload));
+        }
     </script>
 </body>
 </html>

@@ -18,26 +18,14 @@ func NewBookingRepo() *BookingRepo {
 	}
 }
 
-func (r *BookingRepo) SaveDraft(ctx context.Context, userID int64, zone string) error {
+func (r *BookingRepo) SaveDraft(ctx context.Context, userID int64, serviceName string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.drafts[userID] = &domain.Booking{
-		UserID: userID,
-		Zone:   zone,
+		UserID:      userID,
+		ServiceName: serviceName,
 	}
-	return nil
-}
-
-func (r *BookingRepo) SetTable(ctx context.Context, userID int64, table string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	b, exists := r.drafts[userID]
-	if !exists {
-		return domain.ErrBookingNotFound
-	}
-	b.Table = table
 	return nil
 }
 
@@ -53,7 +41,7 @@ func (r *BookingRepo) SetDraftDate(ctx context.Context, userID int64, date strin
 	return nil
 }
 
-func (r *BookingRepo) SetDraftTimeAndContacts(ctx context.Context, userID int64, timeSlot string, name string, phone string) error {
+func (r *BookingRepo) SetDraftTimeAndContacts(ctx context.Context, userID int64, timeSlot string, name string, phone string, comment string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -64,10 +52,11 @@ func (r *BookingRepo) SetDraftTimeAndContacts(ctx context.Context, userID int64,
 	b.TimeSlot = timeSlot
 	b.UserName = name
 	b.Phone = phone
+	b.Comment = comment
 	return nil
 }
 
-func (r *BookingRepo) CompleteBooking(ctx context.Context, userID int64, timeSlot string, name string, phone string) (*domain.Booking, error) {
+func (r *BookingRepo) CompleteBooking(ctx context.Context, userID int64, timeSlot string, name string, phone string, comment string) (*domain.Booking, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -76,8 +65,9 @@ func (r *BookingRepo) CompleteBooking(ctx context.Context, userID int64, timeSlo
 		return nil, domain.ErrBookingNotFound
 	}
 
+	// Проверяем, не занято ли это время для данной услуги и даты
 	for _, existing := range r.drafts {
-		if existing.TimeSlot == timeSlot && existing.Table == b.Table && existing.UserID != userID {
+		if existing.TimeSlot == timeSlot && existing.ServiceName == b.ServiceName && existing.Date == b.Date && existing.UserID != userID {
 			return nil, domain.ErrTimeSlotTaken
 		}
 	}
@@ -85,8 +75,9 @@ func (r *BookingRepo) CompleteBooking(ctx context.Context, userID int64, timeSlo
 	b.TimeSlot = timeSlot
 	b.UserName = name
 	b.Phone = phone
+	b.Comment = comment
 
-	return b, nil // Возвращаем указатель
+	return b, nil
 }
 
 func (r *BookingRepo) GetByUserID(ctx context.Context, userID int64) (*domain.Booking, error) {
@@ -105,7 +96,7 @@ func (r *BookingRepo) GetDraftByUserID(ctx context.Context, userID int64) (*doma
 	defer r.mu.Unlock()
 
 	b, exists := r.drafts[userID]
-	if !exists || b.TimeSlot != "" {
+	if !exists {
 		return nil, domain.ErrBookingNotFound
 	}
 	return b, nil
@@ -123,8 +114,6 @@ func (r *BookingRepo) DeleteConfirmed(ctx context.Context, userID int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// В memory репозитории нет различия между draft и confirmed по статусу
-	// Считаем confirmed те, у которых есть TimeSlot
 	if b, exists := r.drafts[userID]; exists && b.TimeSlot != "" {
 		delete(r.drafts, userID)
 	}
@@ -135,7 +124,6 @@ func (r *BookingRepo) DeleteDraft(ctx context.Context, userID int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Удаляем только если это черновик (нет TimeSlot)
 	if b, exists := r.drafts[userID]; exists && b.TimeSlot == "" {
 		delete(r.drafts, userID)
 	}
@@ -163,16 +151,14 @@ func (r *BookingRepo) ResetAll(ctx context.Context) error {
 	return nil
 }
 
-func (r *BookingRepo) GetTakenTimeSlots(ctx context.Context, date string) (map[string][]string, error) {
+func (r *BookingRepo) GetTakenTimeSlots(ctx context.Context, date string, serviceName string) ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	result := make(map[string][]string)
+	var result []string
 	for _, b := range r.drafts {
-		// В memory считаем confirmed те, у которых есть TimeSlot
-		if b.TimeSlot != "" && b.Date == date {
-			key := b.Zone + "_" + b.Table
-			result[key] = append(result[key], b.TimeSlot)
+		if b.TimeSlot != "" && b.Date == date && b.ServiceName == serviceName {
+			result = append(result, b.TimeSlot)
 		}
 	}
 	return result, nil

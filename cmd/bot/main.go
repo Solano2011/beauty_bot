@@ -35,6 +35,8 @@ func main() {
 		}
 	}
 
+	webAppURL := getEnvOrDefault("WEBAPP_URL", "https://beauty-bot.example.com")
+
 	// Строим строку подключения из переменных окружения
 	dbHost := getEnvOrDefault("DB_HOST", "localhost")
 	dbPort := getEnvOrDefault("DB_PORT", "5432")
@@ -56,8 +58,8 @@ func main() {
 	// Закрываем соединение при остановке бота
 	defer db.Conn.Close(context.Background())
 
-	// Передаем db внутрь app.Run
-	app.Run(token, adminID, db)
+	// Передаем db и webAppURL внутрь app.Run
+	app.Run(token, adminID, db, webAppURL)
 }
 
 func getEnvOrDefault(key, defaultValue string) string {

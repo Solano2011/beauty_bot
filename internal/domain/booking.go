@@ -12,38 +12,37 @@ var (
 )
 
 type Booking struct {
-	ID        string    `json:"id"`
-	UserID    int64     `json:"user_id"`
-	UserName  string    `json:"name"`  // Изменили тег на "name" под фронтенд
-	Phone     string    `json:"phone"` // Тег "phone"
-	Zone      string    `json:"zone"`
-	Table     string    `json:"table"`
-	TimeSlot  string    `json:"timeslot"` // Убедись, что здесь TimeSlot с большой S
-	Date      string    `json:"date"`     // Формат YYYY-MM-DD
-	CreatedAt time.Time `json:"created_at"`
+	ID          string    `json:"id"`
+	UserID      int64     `json:"user_id"`
+	UserName    string    `json:"name"`
+	Phone       string    `json:"phone"`
+	ServiceName string    `json:"service_name"`
+	Comment     string    `json:"comment"`
+	TimeSlot    string    `json:"timeslot"`
+	Date        string    `json:"date"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type BookingRepository interface {
-	SaveDraft(ctx context.Context, userID int64, zone string) error
-	SetTable(ctx context.Context, userID int64, table string) error
+	SaveDraft(ctx context.Context, userID int64, serviceName string) error
 	SetDraftDate(ctx context.Context, userID int64, date string) error
-	SetDraftTimeAndContacts(ctx context.Context, userID int64, timeSlot string, name string, phone string) error // Новый метод
-	CompleteBooking(ctx context.Context, userID int64, timeSlot string, name string, phone string) (*Booking, error)
+	SetDraftTimeAndContacts(ctx context.Context, userID int64, timeSlot string, name string, phone string, comment string) error
+	CompleteBooking(ctx context.Context, userID int64, timeSlot string, name string, phone string, comment string) (*Booking, error)
 	GetByUserID(ctx context.Context, userID int64) (*Booking, error)
 	GetDraftByUserID(ctx context.Context, userID int64) (*Booking, error)
 	Delete(ctx context.Context, userID int64) error
 	DeleteConfirmed(ctx context.Context, userID int64) error
 	DeleteDraft(ctx context.Context, userID int64) error
 	GetAllActive(ctx context.Context) ([]Booking, error)
-	GetTakenTimeSlots(ctx context.Context, date string) (map[string][]string, error)
+	GetTakenTimeSlots(ctx context.Context, date string, serviceName string) ([]string, error)
 	ResetAll(ctx context.Context) error
 }
 
 type BookingService interface {
-	StartBookingDraft(ctx context.Context, userID int64, zone string) error
-	SetBookingTable(ctx context.Context, userID int64, table string) error
-	SetDraftTimeAndContacts(ctx context.Context, userID int64, timeSlot string, name string, phone string) error // Новый метод
-	CompleteBookingDraft(ctx context.Context, userID int64, timeSlot string, name string, phone string) (*Booking, error)
+	StartBookingDraft(ctx context.Context, userID int64, serviceName string) error
+	SetBookingDate(ctx context.Context, userID int64, date string) error
+	SetDraftTimeAndContacts(ctx context.Context, userID int64, timeSlot string, name string, phone string, comment string) error
+	CompleteBookingDraft(ctx context.Context, userID int64, timeSlot string, name string, phone string, comment string) (*Booking, error)
 	GetUserBooking(ctx context.Context, userID int64) (*Booking, error)
 	GetUserDraft(ctx context.Context, userID int64) (*Booking, error)
 	CancelBooking(ctx context.Context, userID int64) error

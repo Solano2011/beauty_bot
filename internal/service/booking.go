@@ -13,21 +13,20 @@ func NewBookingService(repo domain.BookingRepository) *BookingSvc {
 	return &BookingSvc{repo: repo}
 }
 
-func (s *BookingSvc) StartBookingDraft(ctx context.Context, userID int64, zone string) error {
-	return s.repo.SaveDraft(ctx, userID, zone)
+func (s *BookingSvc) StartBookingDraft(ctx context.Context, userID int64, serviceName string) error {
+	return s.repo.SaveDraft(ctx, userID, serviceName)
 }
 
-func (s *BookingSvc) SetBookingTable(ctx context.Context, userID int64, table string) error {
-	return s.repo.SetTable(ctx, userID, table)
+func (s *BookingSvc) SetBookingDate(ctx context.Context, userID int64, date string) error {
+	return s.repo.SetDraftDate(ctx, userID, date)
 }
 
-func (s *BookingSvc) SetDraftTimeAndContacts(ctx context.Context, userID int64, timeSlot string, name string, phone string) error {
-	return s.repo.SetDraftTimeAndContacts(ctx, userID, timeSlot, name, phone)
+func (s *BookingSvc) SetDraftTimeAndContacts(ctx context.Context, userID int64, timeSlot string, name string, phone string, comment string) error {
+	return s.repo.SetDraftTimeAndContacts(ctx, userID, timeSlot, name, phone, comment)
 }
 
-// Добавили name и phone в параметры
-func (s *BookingSvc) CompleteBookingDraft(ctx context.Context, userID int64, timeSlot string, name string, phone string) (*domain.Booking, error) {
-	return s.repo.CompleteBooking(ctx, userID, timeSlot, name, phone)
+func (s *BookingSvc) CompleteBookingDraft(ctx context.Context, userID int64, timeSlot string, name string, phone string, comment string) (*domain.Booking, error) {
+	return s.repo.CompleteBooking(ctx, userID, timeSlot, name, phone, comment)
 }
 
 func (s *BookingSvc) GetUserBooking(ctx context.Context, userID int64) (*domain.Booking, error) {

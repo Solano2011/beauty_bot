@@ -15,73 +15,33 @@ type BookingRepo struct {
 	db *DB
 }
 
-// NewBookingRepo принимает наше подключение к БД
 func NewBookingRepo(db *DB) *BookingRepo {
 	return &BookingRepo{db: db}
 }
 
-func (r *BookingRepo) SaveDraft(ctx context.Context, userID int64, zone string) error {
-	// ВАЖНО: Так как в БД стоит внешний ключ (REFERENCES users(id)),
-	// нам нужно гарантировать, что пользователь существует в таблице users.
-	// Добавляем его "тихо", если его еще нет:
+func (r *BookingRepo) SaveDraft(ctx context.Context, userID int64, serviceName string) error {
+	// Гарантируем, что пользователь существует в таблице users
 	_, err := r.db.Conn.Exec(ctx, `INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`, userID)
 	if err != nil {
 		return err
 	}
 
-	// Удаляем старый черновик, если он был (чтобы не плодить мусор)
+	// Удаляем старый черновик, если он был
 	_, err = r.db.Conn.Exec(ctx, `DELETE FROM bookings WHERE user_id = $1 AND status = 'draft'`, userID)
 	if err != nil {
 		return err
 	}
 
-	// Создаем новый черновик. Пустые строки '' заменяют нам будущие стол и время
+	// Создаем новый черновик
 	_, err = r.db.Conn.Exec(ctx, `
-        INSERT INTO bookings (user_id, zone, table_name, time_slot, date, status)
-        VALUES ($1, $2, '', '', '', 'draft')`,
-		userID, zone,
+        INSERT INTO bookings (user_id, service_name, time_slot, date, status)
+        VALUES ($1, $2, '', '', 'draft')`,
+		userID, serviceName,
 	)
 	return err
 }
 
-func (r *BookingRepo) SetTable(ctx context.Context, userID int64, table string) error {
-	// Обновляем стол только у черновика
-	cmdTag, err := r.db.Conn.Exec(ctx, `
-        UPDATE bookings SET table_name = $1
-        WHERE user_id = $2 AND status = 'draft'`,
-		table, userID,
-	)
-	if err != nil {
-		return err
-	}
-
-	// Если ни одна строка не обновилась, значит черновика нет
-	if cmdTag.RowsAffected() == 0 {
-		return domain.ErrBookingNotFound
-	}
-	return nil
-}
-
-func (r *BookingRepo) SetDraftTimeAndContacts(ctx context.Context, userID int64, timeSlot string, name string, phone string) error {
-	// Обновляем время и контакты в черновике (без изменения статуса)
-	cmdTag, err := r.db.Conn.Exec(ctx, `
-        UPDATE bookings SET time_slot = $1, user_name = $2, phone = $3
-        WHERE user_id = $4 AND status = 'draft'`,
-		timeSlot, name, phone, userID,
-	)
-	if err != nil {
-		return err
-	}
-
-	// Если ни одна строка не обновилась, значит черновика нет
-	if cmdTag.RowsAffected() == 0 {
-		return domain.ErrBookingNotFound
-	}
-	return nil
-}
-
 func (r *BookingRepo) SetDraftDate(ctx context.Context, userID int64, date string) error {
-	// Обновляем дату в черновике
 	cmdTag, err := r.db.Conn.Exec(ctx, `
         UPDATE bookings SET date = $1
         WHERE user_id = $2 AND status = 'draft'`,
@@ -91,26 +51,40 @@ func (r *BookingRepo) SetDraftDate(ctx context.Context, userID int64, date strin
 		return err
 	}
 
-	// Если ни одна строка не обновилась, значит черновика нет
 	if cmdTag.RowsAffected() == 0 {
 		return domain.ErrBookingNotFound
 	}
 	return nil
 }
 
-func (r *BookingRepo) CompleteBooking(ctx context.Context, userID int64, timeSlot string, name string, phone string) (*domain.Booking, error) {
-	// Используем транзакцию для предотвращения race condition
+func (r *BookingRepo) SetDraftTimeAndContacts(ctx context.Context, userID int64, timeSlot string, name string, phone string, comment string) error {
+	cmdTag, err := r.db.Conn.Exec(ctx, `
+        UPDATE bookings SET time_slot = $1, user_name = $2, phone = $3, comment = $4
+        WHERE user_id = $5 AND status = 'draft'`,
+		timeSlot, name, phone, comment, userID,
+	)
+	if err != nil {
+		return err
+	}
+
+	if cmdTag.RowsAffected() == 0 {
+		return domain.ErrBookingNotFound
+	}
+	return nil
+}
+
+func (r *BookingRepo) CompleteBooking(ctx context.Context, userID int64, timeSlot string, name string, phone string, comment string) (*domain.Booking, error) {
 	tx, err := r.db.Conn.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	// 1. Получаем текущий черновик, чтобы узнать зону и стол
-	var zone, table, date string
+	// 1. Получаем текущий черновик
+	var serviceName, date string
 	err = tx.QueryRow(ctx, `
-        SELECT zone, table_name, date FROM bookings
-        WHERE user_id = $1 AND status = 'draft'`, userID).Scan(&zone, &table, &date)
+        SELECT service_name, date FROM bookings
+        WHERE user_id = $1 AND status = 'draft'`, userID).Scan(&serviceName, &date)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrBookingNotFound
@@ -118,37 +92,34 @@ func (r *BookingRepo) CompleteBooking(ctx context.Context, userID int64, timeSlo
 		return nil, err
 	}
 
-	// 2. Проверяем, не занял ли кто-то этот стол на это же время и дату (FOR UPDATE блокирует конфликтующие строки)
+	// 2. Проверяем, не занято ли это время для данной услуги и даты
 	var conflictID int
 	err = tx.QueryRow(ctx, `
         SELECT id FROM bookings
-        WHERE zone = $1 AND table_name = $2 AND time_slot = $3 AND date = $4 AND status = 'confirmed'
+        WHERE service_name = $1 AND time_slot = $2 AND date = $3 AND status = 'confirmed'
         FOR UPDATE`,
-		zone, table, timeSlot, date).Scan(&conflictID)
+		serviceName, timeSlot, date).Scan(&conflictID)
 
 	if err == nil {
-		// Если err == nil, значит такая запись НАШЛАСЬ, стол занят!
 		return nil, domain.ErrTimeSlotTaken
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		// Если ошибка какая-то другая (не "нет строк"), возвращаем её
 		return nil, err
 	}
 
-	// 3. Стол свободен. Обновляем статус черновика на confirmed и сохраняем контакты
+	// 3. Обновляем статус черновика на confirmed
 	var b domain.Booking
 	err = tx.QueryRow(ctx, `
         UPDATE bookings
-        SET time_slot = $1, user_name = $2, phone = $3, status = 'confirmed', created_at = $4
-        WHERE user_id = $5 AND status = 'draft'
-        RETURNING user_id, zone, table_name, time_slot, date, user_name, phone, created_at`,
-		timeSlot, name, phone, time.Now(), userID,
-	).Scan(&b.UserID, &b.Zone, &b.Table, &b.TimeSlot, &b.Date, &b.UserName, &b.Phone, &b.CreatedAt)
+        SET time_slot = $1, user_name = $2, phone = $3, comment = $4, status = 'confirmed', created_at = $5
+        WHERE user_id = $6 AND status = 'draft'
+        RETURNING user_id, service_name, time_slot, date, user_name, phone, comment, created_at`,
+		timeSlot, name, phone, comment, time.Now(), userID,
+	).Scan(&b.UserID, &b.ServiceName, &b.TimeSlot, &b.Date, &b.UserName, &b.Phone, &b.Comment, &b.CreatedAt)
 
 	if err != nil {
 		return nil, err
 	}
 
-	// Коммитим транзакцию
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
@@ -158,14 +129,13 @@ func (r *BookingRepo) CompleteBooking(ctx context.Context, userID int64, timeSlo
 
 func (r *BookingRepo) GetByUserID(ctx context.Context, userID int64) (*domain.Booking, error) {
 	var b domain.Booking
-	// Ищем только подтвержденные брони. Берем самую последнюю (ORDER BY ... DESC)
 	err := r.db.Conn.QueryRow(ctx, `
-        SELECT user_id, zone, table_name, time_slot, COALESCE(date, ''), COALESCE(user_name, ''), COALESCE(phone, ''), created_at
+        SELECT user_id, service_name, time_slot, COALESCE(date, ''), COALESCE(user_name, ''), COALESCE(phone, ''), COALESCE(comment, ''), created_at
         FROM bookings
         WHERE user_id = $1 AND status = 'confirmed'
         ORDER BY created_at DESC LIMIT 1`,
 		userID,
-	).Scan(&b.UserID, &b.Zone, &b.Table, &b.TimeSlot, &b.Date, &b.UserName, &b.Phone, &b.CreatedAt)
+	).Scan(&b.UserID, &b.ServiceName, &b.TimeSlot, &b.Date, &b.UserName, &b.Phone, &b.Comment, &b.CreatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrBookingNotFound
@@ -177,14 +147,13 @@ func (r *BookingRepo) GetByUserID(ctx context.Context, userID int64) (*domain.Bo
 
 func (r *BookingRepo) GetDraftByUserID(ctx context.Context, userID int64) (*domain.Booking, error) {
 	var b domain.Booking
-	// Ищем только черновики
 	err := r.db.Conn.QueryRow(ctx, `
-        SELECT user_id, zone, COALESCE(table_name, ''), COALESCE(time_slot, ''), COALESCE(date, ''), COALESCE(user_name, ''), COALESCE(phone, ''), COALESCE(created_at, NOW())
+        SELECT user_id, service_name, COALESCE(time_slot, ''), COALESCE(date, ''), COALESCE(user_name, ''), COALESCE(phone, ''), COALESCE(comment, ''), COALESCE(created_at, NOW())
         FROM bookings
         WHERE user_id = $1 AND status = 'draft'
         ORDER BY created_at DESC LIMIT 1`,
 		userID,
-	).Scan(&b.UserID, &b.Zone, &b.Table, &b.TimeSlot, &b.Date, &b.UserName, &b.Phone, &b.CreatedAt)
+	).Scan(&b.UserID, &b.ServiceName, &b.TimeSlot, &b.Date, &b.UserName, &b.Phone, &b.Comment, &b.CreatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrBookingNotFound
@@ -195,24 +164,20 @@ func (r *BookingRepo) GetDraftByUserID(ctx context.Context, userID int64) (*doma
 }
 
 func (r *BookingRepo) Delete(ctx context.Context, userID int64) error {
-	// Удаляем все записи пользователя (и черновики, и готовые)
 	_, err := r.db.Conn.Exec(ctx, `DELETE FROM bookings WHERE user_id = $1`, userID)
 	return err
 }
 
 func (r *BookingRepo) DeleteConfirmed(ctx context.Context, userID int64) error {
-	// Удаляем только подтвержденные брони
 	log.Printf("🗑️ Попытка удалить подтвержденные брони для userID=%d", userID)
 	cmdTag, err := r.db.Conn.Exec(ctx, `DELETE FROM bookings WHERE user_id = $1 AND status = 'confirmed'`, userID)
 	if err != nil {
 		log.Printf("❌ Ошибка при удалении подтвержденных броней для userID=%d: %v", userID, err)
 		return err
 	}
-	// Логируем количество удаленных записей
 	rowsAffected := cmdTag.RowsAffected()
 	log.Printf("✅ Удалено подтвержденных броней для userID=%d: %d записей", userID, rowsAffected)
 	if rowsAffected == 0 {
-		// Не было записей для удаления - это не ошибка, но хорошо бы знать
 		log.Printf("⚠️ Не найдено подтвержденных броней для удаления у userID=%d", userID)
 		return nil
 	}
@@ -220,14 +185,13 @@ func (r *BookingRepo) DeleteConfirmed(ctx context.Context, userID int64) error {
 }
 
 func (r *BookingRepo) DeleteDraft(ctx context.Context, userID int64) error {
-	// Удаляем только черновики
 	_, err := r.db.Conn.Exec(ctx, `DELETE FROM bookings WHERE user_id = $1 AND status = 'draft'`, userID)
 	return err
 }
 
 func (r *BookingRepo) GetAllActive(ctx context.Context) ([]domain.Booking, error) {
 	rows, err := r.db.Conn.Query(ctx, `
-        SELECT user_id, zone, table_name, time_slot, COALESCE(date, ''), COALESCE(user_name, ''), COALESCE(phone, ''), created_at
+        SELECT user_id, service_name, time_slot, COALESCE(date, ''), COALESCE(user_name, ''), COALESCE(phone, ''), COALESCE(comment, ''), created_at
         FROM bookings
         WHERE status = 'confirmed'
         ORDER BY created_at DESC`,
@@ -240,7 +204,7 @@ func (r *BookingRepo) GetAllActive(ctx context.Context) ([]domain.Booking, error
 	var result []domain.Booking
 	for rows.Next() {
 		var b domain.Booking
-		if err := rows.Scan(&b.UserID, &b.Zone, &b.Table, &b.TimeSlot, &b.Date, &b.UserName, &b.Phone, &b.CreatedAt); err != nil {
+		if err := rows.Scan(&b.UserID, &b.ServiceName, &b.TimeSlot, &b.Date, &b.UserName, &b.Phone, &b.Comment, &b.CreatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, b)
@@ -253,28 +217,26 @@ func (r *BookingRepo) ResetAll(ctx context.Context) error {
 	return err
 }
 
-func (r *BookingRepo) GetTakenTimeSlots(ctx context.Context, date string) (map[string][]string, error) {
-	// Возвращает карту: зона+стол -> список занятых слотов на конкретную дату
+func (r *BookingRepo) GetTakenTimeSlots(ctx context.Context, date string, serviceName string) ([]string, error) {
 	rows, err := r.db.Conn.Query(ctx, `
-        SELECT zone, table_name, time_slot
+        SELECT time_slot
         FROM bookings
-        WHERE date = $1 AND status = 'confirmed'
-        ORDER BY zone, table_name, time_slot`,
-		date,
+        WHERE date = $1 AND service_name = $2 AND status = 'confirmed'
+        ORDER BY time_slot`,
+		date, serviceName,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	result := make(map[string][]string)
+	var result []string
 	for rows.Next() {
-		var zone, table, timeSlot string
-		if err := rows.Scan(&zone, &table, &timeSlot); err != nil {
+		var timeSlot string
+		if err := rows.Scan(&timeSlot); err != nil {
 			return nil, err
 		}
-		key := zone + "_" + table
-		result[key] = append(result[key], timeSlot)
+		result = append(result, timeSlot)
 	}
 	return result, nil
 }

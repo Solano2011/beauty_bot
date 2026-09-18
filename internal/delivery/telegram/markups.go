@@ -6,75 +6,42 @@ var (
 	Menu = &tele.ReplyMarkup{}
 
 	// Главное меню
-	BtnBook      = Menu.Data(" Забронировать стол", "btn_book")
-	BtnMenu      = Menu.WebApp(" Меню & Табачная карта", &tele.WebApp{URL: "https://hookah-test.ru/?start=menu"})
-	BtnMyBooking = Menu.Data(" Моя бронь", "btn_my_booking")
-	BtnContacts  = Menu.Data(" Локация & Контакты", "btn_contacts")
+	BtnMyBooking = Menu.Data("📅 Моя запись", "btn_my_booking")
+	BtnContacts  = Menu.Data("📍 Контакты", "btn_contacts")
 
 	// Навигация
-	BtnBackToMain    = Menu.Data(" Назад в меню", "btn_back_main")
-	BtnCancelBooking = Menu.Data(" Отменить бронь", "btn_cancel_booking")
+	BtnBackToMain    = Menu.Data("◀️ Назад в меню", "btn_back_main")
+	BtnCancelBooking = Menu.Data("❌ Отменить запись", "btn_cancel_booking")
 
 	// Эндпоинты
-	BtnZone  = Menu.Data("", "zone")
-	BtnTable = Menu.Data("", "table") // Наша новая кнопка для столов
-	BtnTime  = Menu.Data("", "time")
+	BtnService = Menu.Data("", "service")
 
-	// Подтверждение замены брони
+	// Подтверждение замены записи
 	BtnConfirmReplace = Menu.Data("✅ Да, отменить старую", "confirm_replace")
 	BtnKeepOldBooking = Menu.Data("❌ Нет, оставить", "keep_old")
 
 	// Админка
-	BtnAdminRefresh  = Menu.Data(" Обновить сводку", "admin_refresh")
-	BtnAdminResetAll = Menu.Data(" Сбросить все слоты", "admin_reset_all")
+	BtnAdminRefresh  = Menu.Data("🔄 Обновить сводку", "admin_refresh")
+	BtnAdminResetAll = Menu.Data("🗑 Сбросить все записи", "admin_reset_all")
 )
 
 func BuildMainMenu() *tele.ReplyMarkup {
 	m := &tele.ReplyMarkup{}
 	m.Inline(
-		m.Row(BtnBook),
-		m.Row(BtnMenu, BtnMyBooking),
+		m.Row(BtnMyBooking),
 		m.Row(BtnContacts),
 	)
 	return m
 }
 
-func BuildZonesMenu() *tele.ReplyMarkup {
+func BuildServicesMenu() *tele.ReplyMarkup {
 	m := &tele.ReplyMarkup{}
-	baseURL := "https://hookah-test.ru/"
-
-	// Делаем первую кнопку открывашкой Web App!
-	btnLounge := m.WebApp(" Общий лаунж • Атмосферный зал", &tele.WebApp{URL: baseURL})
-
-	// Остальные залы остаются обычными кнопками, так как там нет карты
-	btnPS5 := m.Data(" PS5 Lounge • 4K TV & Звук", "zone", "Зона с PS5")
-	btnVIP := m.Data(" VIP-комната • До 8 человек", "zone", "VIP-комната")
-
+	
+	// Пока одна услуга (захардкожена)
+	btnNails := m.Data("💅 Наращивание ногтей", "service", "Наращивание ногтей")
+	
 	m.Inline(
-		m.Row(btnLounge),
-		m.Row(btnPS5),
-		m.Row(btnVIP),
-		m.Row(BtnBackToMain),
-	)
-	return m
-}
-
-func BuildTablesMenu() *tele.ReplyMarkup {
-	m := &tele.ReplyMarkup{}
-	m.Inline(
-		m.Row(m.Data("Стол 1", "table", "Стол 1"), m.Data("Стол 2", "table", "Стол 2")),
-		m.Row(m.Data("Стол 3", "table", "Стол 3"), m.Data("Стол 4", "table", "Стол 4")),
-		m.Row(m.Data("👑 У окна (Стол 5)", "table", "Стол 5")),
-		m.Row(BtnBackToMain),
-	)
-	return m
-}
-
-func BuildTimeMenu() *tele.ReplyMarkup {
-	m := &tele.ReplyMarkup{}
-	m.Inline(
-		m.Row(m.Data(" 18:00", "time", "18:00"), m.Data(" 20:00", "time", "20:00")),
-		m.Row(m.Data(" 22:00", "time", "22:00"), m.Data(" 00:00", "time", "00:00")),
+		m.Row(btnNails),
 		m.Row(BtnBackToMain),
 	)
 	return m
@@ -82,7 +49,7 @@ func BuildTimeMenu() *tele.ReplyMarkup {
 
 func BuildContactsMenu() *tele.ReplyMarkup {
 	m := &tele.ReplyMarkup{}
-	btnMap := m.URL(" Открыть на Яндекс.Картах", "https://yandex.ru/maps")
+	btnMap := m.URL("🗺 Открыть на Яндекс.Картах", "https://yandex.ru/maps")
 	m.Inline(
 		m.Row(btnMap),
 		m.Row(BtnBackToMain),

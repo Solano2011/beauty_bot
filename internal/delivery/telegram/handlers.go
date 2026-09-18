@@ -50,8 +50,8 @@ func (h *Handlers) InitRoutes(b *tele.Bot) {
 	// Обработчик данных из Web App
 	b.Handle(tele.OnWebApp, h.handleWebApp)
 
-	// Обработчик callback кнопки "Моя бронь" из Inline-клавиатуры
-	b.Handle(tele.OnCallback, h.handleCallbackQuery)
+	// Обработчик кнопки "Моя бронь"
+	b.Handle(&BtnMyBookings, h.handleMyBookings)
 
 	b.Handle(&BtnAdminRefresh, h.handleAdminRefresh)
 	b.Handle(&BtnAdminResetAll, h.handleAdminResetAll)
@@ -224,25 +224,13 @@ func (h *Handlers) handleWebApp(c tele.Context) error {
 	return c.Send(text, BuildInlineMainMenu(h.webAppBaseURL), tele.ModeMarkdown)
 }
 
-// handleCallbackQuery обрабатывает нажатие на inline-кнопки
-func (h *Handlers) handleCallbackQuery(c tele.Context) error {
-	data := c.Callback().Data
-
-	// Отвечаем на callback сразу, чтобы кнопка не "висела" в загрузке
-	if err := c.Respond(); err != nil {
-		log.Printf("⚠️ Ошибка ответа на callback: %v", err)
-	}
-
-	switch data {
-	case "my_bookings":
-		return h.handleMyBookings(c)
-	default:
-		return nil
-	}
-}
-
 // handleMyBookings обрабатывает нажатие на кнопку "📅 Моя бронь"
 func (h *Handlers) handleMyBookings(c tele.Context) error {
+	// Обязательно отвечаем на callback, чтобы убрать "часики" в Telegram
+	if err := c.Respond(); err != nil {
+		return err
+	}
+
 	ctx := context.Background()
 	b, err := h.bookingService.GetUserBooking(ctx, c.Sender().ID)
 

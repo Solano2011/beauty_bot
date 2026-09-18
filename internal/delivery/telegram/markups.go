@@ -6,8 +6,9 @@ var (
 	Menu = &tele.ReplyMarkup{}
 
 	// Главное меню (Inline-кнопки под сообщением)
-	BtnMyBooking = Menu.Data("📅 Моя запись", "btn_my_booking")
-	BtnContacts  = Menu.Data("📍 Контакты", "btn_contacts")
+	BtnMyBooking     = Menu.Data("📅 Моя запись", "btn_my_booking")
+	BtnMyBookings    = Menu.Data("📅 Моя бронь", "my_bookings")
+	BtnContacts      = Menu.Data("📍 Контакты", "btn_contacts")
 
 	// Навигация
 	BtnBackToMain    = Menu.Data("◀️ Назад в меню", "btn_back_main")
@@ -30,11 +31,10 @@ func BuildInlineMainMenu(webAppURL string) *tele.ReplyMarkup {
 	m := &tele.ReplyMarkup{}
 
 	btnWebApp := m.WebApp("💅 Записаться", &tele.WebApp{URL: webAppURL})
-	btnMyBookings := m.Data("📅 Моя бронь", "my_bookings")
 
 	m.Inline(
 		m.Row(btnWebApp),
-		m.Row(btnMyBookings),
+		m.Row(BtnMyBookings),
 	)
 	return m
 }

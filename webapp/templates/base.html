@@ -258,6 +258,33 @@
             display: block;
         }
 
+        /* КНОПКА НАЗАД */
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            background: white;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            color: #6a6a6a;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .back-btn:active {
+            transform: scale(0.96);
+        }
+
+        .back-btn:hover {
+            border-color: #d4a574;
+            color: #2a2a2a;
+        }
+
         .service-menu-title {
             font-size: 24px;
             font-weight: 700;
@@ -352,6 +379,13 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- КНОПКА НАЗАД -->
+        <div id="backButtonContainer" style="display: none;">
+            <button class="back-btn" onclick="backToMenu()">
+                ⬅️ Назад к выбору услуги
+            </button>
         </div>
 
         <!-- ЗАГОЛОВОК С УСЛУГОЙ -->
@@ -450,11 +484,39 @@
             document.getElementById('serviceSelector').classList.remove('active');
 
             // Показываем основной интерфейс
+            document.getElementById('backButtonContainer').style.display = 'block';
             document.getElementById('mainServiceHeader').style.display = 'block';
             document.getElementById('dateSection').style.display = 'block';
 
             document.getElementById('serviceTitle').innerText = serviceName;
             generateDateButtons();
+        }
+
+        function backToMenu() {
+            // Скрываем основной интерфейс
+            document.getElementById('backButtonContainer').style.display = 'none';
+            document.getElementById('mainServiceHeader').style.display = 'none';
+            document.getElementById('dateSection').style.display = 'none';
+            document.getElementById('timePicker').classList.remove('active');
+            document.getElementById('contactForm').classList.remove('active');
+
+            // Очищаем выбранные данные
+            selectedServiceName = "";
+            selectedDate = "";
+            selectedTime = "";
+
+            // Убираем классы selected
+            document.querySelectorAll('.date-chip').forEach(c => c.classList.remove('selected'));
+            document.querySelectorAll('.time-chip').forEach(c => c.classList.remove('selected'));
+
+            // Очищаем сгенерированные даты
+            document.getElementById('dateScroll').innerHTML = '';
+
+            // Скрываем MainButton
+            tg.MainButton.hide();
+
+            // Показываем экран выбора услуги
+            document.getElementById('serviceSelector').classList.add('active');
         }
 
         function generateDateButtons() {
@@ -505,8 +567,18 @@
             // Скрываем кнопку отправки
             tg.MainButton.hide();
 
+            // Показываем timePicker принудительно
+            const timePicker = document.getElementById('timePicker');
+            timePicker.style.display = 'block';
+            timePicker.classList.add('active');
+
             // Обновляем доступность времени
             updateTimeAvailability();
+
+            // Плавно прокручиваем к выбору времени
+            setTimeout(() => {
+                timePicker.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 150);
         }
 
         function updateTimeAvailability() {

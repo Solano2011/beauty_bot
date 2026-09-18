@@ -497,8 +497,12 @@
             document.getElementById('backButtonContainer').style.display = 'none';
             document.getElementById('mainServiceHeader').style.display = 'none';
             document.getElementById('dateSection').style.display = 'none';
+            document.getElementById('timePicker').style.display = 'none';
             document.getElementById('timePicker').classList.remove('active');
-            document.getElementById('contactForm').classList.remove('active');
+
+            const contactForm = document.getElementById('contactForm');
+            contactForm.style.display = 'none';
+            contactForm.classList.remove('active');
 
             // Очищаем выбранные данные
             selectedServiceName = "";
@@ -511,6 +515,11 @@
 
             // Очищаем сгенерированные даты
             document.getElementById('dateScroll').innerHTML = '';
+
+            // Очищаем поля формы
+            document.getElementById('userName').value = '';
+            document.getElementById('userPhone').value = '';
+            document.getElementById('userComment').value = '';
 
             // Скрываем MainButton
             tg.MainButton.hide();
@@ -615,8 +624,9 @@
             document.querySelectorAll('.time-chip').forEach(c => c.classList.remove('selected'));
             element.classList.add('selected');
 
-            // Показываем форму
+            // Показываем форму принудительно
             const contactForm = document.getElementById('contactForm');
+            contactForm.style.display = 'block';
             contactForm.classList.add('active');
 
             // Показываем нативную кнопку Telegram

@@ -25,6 +25,21 @@ var (
 	BtnAdminResetAll = Menu.Data("🗑 Сбросить все записи", "admin_reset_all")
 )
 
+// BuildMainMenuKeyboard создаёт постоянную Reply-клавиатуру с главными функциями
+func BuildMainMenuKeyboard(webAppURL string) *tele.ReplyMarkup {
+	m := &tele.ReplyMarkup{
+		ResizeKeyboard: true,
+	}
+
+	btnWebApp := m.WebApp("💅 Записаться", &tele.WebApp{URL: webAppURL})
+	btnMyBookings := m.Text("📅 Моя бронь")
+
+	m.Reply(
+		m.Row(btnWebApp, btnMyBookings),
+	)
+	return m
+}
+
 func BuildMainMenu() *tele.ReplyMarkup {
 	m := &tele.ReplyMarkup{}
 	m.Inline(

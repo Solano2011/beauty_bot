@@ -53,6 +53,9 @@ func (h *Handlers) InitRoutes(b *tele.Bot) {
 	// Обработчик текстовой кнопки "Назад в меню" из Reply-клавиатуры
 	b.Handle("◀️ Назад в меню", h.handleBackToMain)
 
+	// Обработчик текстовой кнопки "Моя бронь" из Reply-клавиатуры
+	b.Handle("📅 Моя бронь", h.handleMyBookings)
+
 	b.Handle(&BtnAdminRefresh, h.handleAdminRefresh)
 	b.Handle(&BtnAdminResetAll, h.handleAdminResetAll)
 }
@@ -65,12 +68,12 @@ func (h *Handlers) handleStart(c tele.Context) error {
 	caption := fmt.Sprintf(
 		"Добро пожаловать, *%s*! 💅\n\n"+
 			"Я помогу вам записаться на процедуры к мастеру.\n"+
-			"Выберите услугу из списка ниже:",
+			"Выберите услугу из меню ниже или нажмите кнопку 📅 Моя бронь для просмотра активных записей.",
 		c.Sender().FirstName,
 	)
 
 	photo := &tele.Photo{File: tele.FromURL(ImgHeroUrl), Caption: caption}
-	return c.Send(photo, BuildServicesMenu(), tele.ModeMarkdown)
+	return c.Send(photo, BuildMainMenuKeyboard(h.webAppBaseURL), tele.ModeMarkdown)
 }
 
 func (h *Handlers) handleBackToMain(c tele.Context) error {
@@ -221,7 +224,38 @@ func (h *Handlers) handleWebApp(c tele.Context) error {
 		booking.ServiceName, booking.Date, booking.TimeSlot, booking.UserName, booking.Phone, booking.Comment,
 	)
 
-	return c.Send(text, BuildMainMenu(), tele.ModeMarkdown)
+	return c.Send(text, BuildMainMenuKeyboard(h.webAppBaseURL), tele.ModeMarkdown)
+}
+
+// handleMyBookings обрабатывает нажатие на текстовую кнопку "📅 Моя бронь"
+func (h *Handlers) handleMyBookings(c tele.Context) error {
+	ctx := context.Background()
+	b, err := h.bookingService.GetUserBooking(ctx, c.Sender().ID)
+
+	if err != nil || b.TimeSlot == "" {
+		return c.Send(
+			"У вас пока нет активных записей.",
+			BuildMainMenuKeyboard(h.webAppBaseURL),
+		)
+	}
+
+	text := fmt.Sprintf(
+		"📋 *Ваша активная запись:*\n"+
+			"━━━━━━━━━━━━━━━\n"+
+			"💅 Услуга: `%s`\n"+
+			"📅 Дата: `%s`\n"+
+			"⏰ Время: `%s`\n"+
+			"👤 Имя: `%s`\n"+
+			"📞 Телефон: `%s`\n"+
+			"💬 Комментарий: `%s`\n\n"+
+			"Для отмены записи используйте кнопку ниже.",
+		b.ServiceName, b.Date, b.TimeSlot, b.UserName, b.Phone, b.Comment,
+	)
+
+	m := &tele.ReplyMarkup{}
+	m.Inline(m.Row(BtnCancelBooking))
+
+	return c.Send(text, m, tele.ModeMarkdown)
 }
 
 func (h *Handlers) handleMyBookingBtn(c tele.Context) error {
@@ -256,7 +290,7 @@ func (h *Handlers) handleCancelBooking(c tele.Context) error {
 	ctx := context.Background()
 	_ = h.bookingService.CancelBooking(ctx, c.Sender().ID)
 	_ = c.Delete()
-	return c.Send("✅ Запись успешно отменена.", BuildMainMenu())
+	return c.Send("✅ Запись успешно отменена.", BuildMainMenuKeyboard(h.webAppBaseURL))
 }
 
 func (h *Handlers) handleContactsBtn(c tele.Context) error {

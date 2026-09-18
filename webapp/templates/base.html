@@ -448,6 +448,7 @@
         let selectedServiceName = "";
         let selectedTime = "";
         let selectedDate = "";
+        let draftCreated = false; // Флаг для отслеживания создания черновика
 
         // Настраиваем нативную кнопку Telegram
         tg.MainButton.setText("Записаться 💅");
@@ -471,7 +472,8 @@
                 document.getElementById('timePicker').style.display = 'none';
                 document.getElementById('contactForm').style.display = 'none';
             } else {
-                // Услуга передана — показываем основной интерфейс
+                // Услуга передана через URL (inline-кнопка) — черновик уже создан на бэкенде
+                draftCreated = true;
                 document.getElementById('serviceTitle').innerText = selectedServiceName;
                 generateDateButtons();
             }
@@ -479,6 +481,7 @@
 
         function selectServiceFromMenu(serviceName) {
             selectedServiceName = serviceName;
+            draftCreated = false; // Сбрасываем флаг
 
             // Скрываем экран выбора услуги
             document.getElementById('serviceSelector').classList.remove('active');
@@ -489,6 +492,36 @@
             document.getElementById('dateSection').style.display = 'block';
 
             document.getElementById('serviceTitle').innerText = serviceName;
+
+            // ВАЖНО: Создаем черновик записи на бэкенде перед генерацией дат
+            // Это необходимо для корректной работы SetBookingDate в handleWebApp
+            const userID = tg.initDataUnsafe?.user?.id;
+            if (userID) {
+                // Отправляем запрос на создание черновика
+                fetch('/api/start-draft', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userID,
+                        service_name: serviceName
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('✅ Черновик записи создан для услуги:', serviceName);
+                        draftCreated = true; // Устанавливаем флаг успешного создания
+                    } else {
+                        console.error('❌ Не удалось создать черновик');
+                        tg.showAlert('Ошибка создания черновика. Попробуйте снова.');
+                    }
+                })
+                .catch(err => {
+                    console.error('❌ Ошибка создания черновика:', err);
+                    tg.showAlert('Ошибка соединения с сервером.');
+                });
+            }
+
             generateDateButtons();
         }
 
@@ -654,6 +687,14 @@
 
             if (!selectedTime || !selectedDate) {
                 tg.showAlert("Выберите дату и время!");
+                return;
+            }
+
+            // КРИТИЧНО: Проверяем, что черновик был создан
+            // При открытии через inline-кнопку (с параметром ?service=) черновик создается бэкендом
+            // При открытии через меню "Записаться" черновик создается через API /api/start-draft
+            if (!draftCreated) {
+                tg.showAlert("Ошибка: черновик записи не создан. Попробуйте выбрать услугу заново.");
                 return;
             }
 

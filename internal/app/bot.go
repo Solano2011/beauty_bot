@@ -236,7 +236,7 @@ func Run(token string, adminID int64, db *postgres.DB, webAppURL string) {
 
 			confirmText += "\n✨ Статус: *Подтверждено*\n\nЖдем вас!"
 
-			_, err = b.Send(user, confirmText, telegram.BuildMainMenu(), tele.ModeMarkdown)
+			_, err = b.Send(user, confirmText, telegram.BuildInlineMainMenu(webAppURL), tele.ModeMarkdown)
 			if err != nil {
 				log.Printf("⚠️ Ошибка при отправке сообщения: %v", err)
 			}
@@ -270,6 +270,52 @@ func Run(token string, adminID int64, db *postgres.DB, webAppURL string) {
 			w.WriteHeader(http.StatusOK)
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{"status": "confirmed"})
+		})
+
+		// --- ЭНДПОИНТ ДЛЯ СОЗДАНИЯ ЧЕРНОВИКА ---
+		http.HandleFunc("/api/start-draft", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			if r.Method != "POST" {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			var data struct {
+				UserID      int64  `json:"user_id"`
+				ServiceName string `json:"service_name"`
+			}
+
+			if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+				http.Error(w, "Invalid request format", http.StatusBadRequest)
+				return
+			}
+
+			if data.UserID == 0 || data.ServiceName == "" {
+				http.Error(w, "Missing user_id or service_name", http.StatusBadRequest)
+				return
+			}
+
+			ctx := context.Background()
+
+			// Создаем черновик записи для пользователя
+			if err := bookingService.StartBookingDraft(ctx, data.UserID, data.ServiceName); err != nil {
+				log.Printf("❌ [API] Ошибка создания черновика для userID=%d, услуга=%s: %v", data.UserID, data.ServiceName, err)
+				http.Error(w, "Failed to create booking draft", http.StatusInternalServerError)
+				return
+			}
+
+			log.Printf("✅ [API] Черновик создан для userID=%d, услуга=%s", data.UserID, data.ServiceName)
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]bool{"success": true})
 		})
 
 		// --- ЭНДПОИНТ ДЛЯ ПРОВЕРКИ ЗАНЯТОСТИ ---

@@ -248,19 +248,121 @@
         .submit-btn {
             display: none; /* Скрываем HTML-кнопку, используем нативную MainButton */
         }
+
+        /* ВЫБОР УСЛУГИ */
+        .service-selector {
+            display: none;
+        }
+
+        .service-selector.active {
+            display: block;
+        }
+
+        .service-menu-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2a2a2a;
+            margin-bottom: 24px;
+            text-align: center;
+            letter-spacing: -0.3px;
+        }
+
+        .service-menu-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .service-menu-item {
+            background: white;
+            border: 2px solid #e8e8e8;
+            border-radius: 16px;
+            padding: 20px 18px;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .service-menu-item:active {
+            transform: scale(0.98);
+        }
+
+        .service-menu-item:hover {
+            border-color: #d4a574;
+            box-shadow: 0 4px 14px rgba(212, 165, 116, 0.2);
+        }
+
+        .service-menu-item .service-icon {
+            font-size: 32px;
+            filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.1));
+        }
+
+        .service-menu-item .service-info {
+            flex: 1;
+        }
+
+        .service-menu-item .service-name {
+            font-size: 17px;
+            font-weight: 600;
+            color: #2a2a2a;
+            margin-bottom: 2px;
+        }
+
+        .service-menu-item .service-price {
+            font-size: 13px;
+            color: #8a8a8a;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- ЭКРАН ВЫБОРА УСЛУГИ (показывается при открытии через прямую кнопку) -->
+        <div class="service-selector" id="serviceSelector">
+            <h1 class="service-menu-title">Выберите услугу</h1>
+            <div class="service-menu-grid">
+                <div class="service-menu-item" onclick="selectServiceFromMenu('Маникюр')">
+                    <span class="service-icon">💅</span>
+                    <div class="service-info">
+                        <div class="service-name">Маникюр</div>
+                        <div class="service-price">от 1500 ₽</div>
+                    </div>
+                </div>
+                <div class="service-menu-item" onclick="selectServiceFromMenu('Педикюр')">
+                    <span class="service-icon">🦶</span>
+                    <div class="service-info">
+                        <div class="service-name">Педикюр</div>
+                        <div class="service-price">от 2000 ₽</div>
+                    </div>
+                </div>
+                <div class="service-menu-item" onclick="selectServiceFromMenu('Покрытие гель-лак')">
+                    <span class="service-icon">✨</span>
+                    <div class="service-info">
+                        <div class="service-name">Покрытие гель-лак</div>
+                        <div class="service-price">от 800 ₽</div>
+                    </div>
+                </div>
+                <div class="service-menu-item" onclick="selectServiceFromMenu('Наращивание ногтей')">
+                    <span class="service-icon">💎</span>
+                    <div class="service-info">
+                        <div class="service-name">Наращивание ногтей</div>
+                        <div class="service-price">от 2500 ₽</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- ЗАГОЛОВОК С УСЛУГОЙ -->
-        <div class="service-header">
+        <div class="service-header" id="mainServiceHeader">
             <div class="service-icon" id="serviceIcon">💅</div>
             <div class="service-title" id="serviceTitle">Загрузка...</div>
             <div class="service-subtitle">Выберите удобное время</div>
         </div>
 
         <!-- ВЫБОР ДАТЫ -->
-        <div class="section">
+        <div class="section" id="dateSection">
             <div class="section-title">Выберите дату</div>
             <div class="date-scroll" id="dateScroll"></div>
         </div>
@@ -325,13 +427,35 @@
         window.onload = function() {
             // Получаем название услуги из URL
             const urlParams = new URLSearchParams(window.location.search);
-            selectedServiceName = urlParams.get('service') || 'Услуга';
+            selectedServiceName = urlParams.get('service');
 
-            document.getElementById('serviceTitle').innerText = selectedServiceName;
-
-            // Генерируем даты
-            generateDateButtons();
+            if (!selectedServiceName) {
+                // Если услуга не передана (открыто через прямую кнопку) — показываем экран выбора
+                document.getElementById('serviceSelector').classList.add('active');
+                document.getElementById('mainServiceHeader').style.display = 'none';
+                document.getElementById('dateSection').style.display = 'none';
+                document.getElementById('timePicker').style.display = 'none';
+                document.getElementById('contactForm').style.display = 'none';
+            } else {
+                // Услуга передана — показываем основной интерфейс
+                document.getElementById('serviceTitle').innerText = selectedServiceName;
+                generateDateButtons();
+            }
         };
+
+        function selectServiceFromMenu(serviceName) {
+            selectedServiceName = serviceName;
+
+            // Скрываем экран выбора услуги
+            document.getElementById('serviceSelector').classList.remove('active');
+
+            // Показываем основной интерфейс
+            document.getElementById('mainServiceHeader').style.display = 'block';
+            document.getElementById('dateSection').style.display = 'block';
+
+            document.getElementById('serviceTitle').innerText = serviceName;
+            generateDateButtons();
+        }
 
         function generateDateButtons() {
             const dateScroll = document.getElementById('dateScroll');

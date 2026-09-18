@@ -246,28 +246,7 @@
 
         /* КНОПКА ОТПРАВКИ */
         .submit-btn {
-            width: 100%;
-            padding: 16px;
-            background: linear-gradient(135deg, #d4a574 0%, #c89563 100%);
-            border: none;
-            border-radius: 14px;
-            color: white;
-            font-size: 16px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 6px 20px rgba(200, 149, 99, 0.3);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .submit-btn:active {
-            transform: scale(0.97);
-        }
-
-        .submit-btn:disabled {
-            opacity: 0.5;
-            pointer-events: none;
+            display: none; /* Скрываем HTML-кнопку, используем нативную MainButton */
         }
     </style>
 </head>
@@ -323,8 +302,6 @@
                 <label class="form-label" for="userComment">Комментарий мастеру</label>
                 <textarea id="userComment" class="input-field" placeholder="Напишите пожелания или особые запросы..."></textarea>
             </div>
-
-            <button class="submit-btn" id="submitBtn" onclick="submitBooking()">Записаться</button>
         </div>
     </div>
 
@@ -335,6 +312,15 @@
         let selectedServiceName = "";
         let selectedTime = "";
         let selectedDate = "";
+
+        // Настраиваем нативную кнопку Telegram
+        tg.MainButton.setText("Записаться 💅");
+        tg.MainButton.color = "#d4a574";
+        tg.MainButton.textColor = "#FFFFFF";
+        tg.MainButton.hide(); // Изначально скрыта
+
+        // Обработчик нажатия на MainButton
+        tg.MainButton.onClick(submitBooking);
 
         window.onload = function() {
             // Получаем название услуги из URL
@@ -392,6 +378,9 @@
             document.querySelectorAll('.time-chip').forEach(c => c.classList.remove('selected'));
             document.getElementById('contactForm').classList.remove('active');
 
+            // Скрываем кнопку отправки
+            tg.MainButton.hide();
+
             // Обновляем доступность времени
             updateTimeAvailability();
         }
@@ -402,8 +391,8 @@
             const timePicker = document.getElementById('timePicker');
             timePicker.classList.add('active');
 
-            // Запрос к /api/slots для получения занятых слотов
-            fetch(`/api/slots?date=${selectedDate}&service=${encodeURIComponent(selectedServiceName)}`)
+            // Запрос к /api/availability для получения занятых слотов
+            fetch(`/api/availability?date=${selectedDate}&service=${encodeURIComponent(selectedServiceName)}`)
                 .then(response => response.json())
                 .then(data => {
                     const takenTimes = data.takenSlots || [];
@@ -434,6 +423,9 @@
             const contactForm = document.getElementById('contactForm');
             contactForm.classList.add('active');
 
+            // Показываем нативную кнопку Telegram
+            tg.MainButton.show();
+
             // Плавно прокручиваем к форме
             setTimeout(() => {
                 contactForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -459,22 +451,20 @@
                 return;
             }
 
-            const userId = tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : 0;
-            const initData = tg.initData;
+            // Показываем индикатор загрузки
+            tg.MainButton.showProgress();
 
-            const payload = {
-                serviceName: selectedServiceName,
-                date: selectedDate,
-                time: selectedTime,
-                userId: userId,
-                name: name,
-                phone: phone,
-                comment: comment,
-                initData: initData
-            };
+            // Формируем строку в формате, который ожидает Go-обработчик
+            // Формат: "date|timeSlot|name|phone|comment"
+            const dataString = `${selectedDate}|${selectedTime}|${name}|${phone}|${comment}`;
 
             // Отправляем данные через Telegram WebApp API
-            tg.sendData(JSON.stringify(payload));
+            tg.sendData(dataString);
+
+            // Закрываем WebApp после отправки
+            setTimeout(() => {
+                tg.close();
+            }, 300);
         }
     </script>
 </body>

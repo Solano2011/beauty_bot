@@ -30,6 +30,17 @@ func Run(token string, adminID int64, db *postgres.DB, webAppURL string) {
 		log.Fatalf("Ошибка создания бота: %v", err)
 	}
 
+	// Устанавливаем меню команд (кнопка "Старт" слева от поля ввода)
+	commands := []tele.Command{
+		{Text: "start", Description: "🌟 Главное меню"},
+		{Text: "admin", Description: "🛠 Панель администратора"},
+	}
+	if err := b.SetCommands(commands); err != nil {
+		log.Printf("⚠️ Не удалось установить команды бота: %v", err)
+	} else {
+		log.Println("✅ Меню команд бота успешно установлено")
+	}
+
 	repo := postgres.NewBookingRepo(db)
 
 	bookingService := service.NewBookingService(repo)

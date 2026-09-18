@@ -448,7 +448,6 @@
         let selectedServiceName = "";
         let selectedTime = "";
         let selectedDate = "";
-        let draftCreated = false; // Флаг для отслеживания создания черновика
 
         // Настраиваем нативную кнопку Telegram
         tg.MainButton.setText("Записаться 💅");
@@ -472,8 +471,7 @@
                 document.getElementById('timePicker').style.display = 'none';
                 document.getElementById('contactForm').style.display = 'none';
             } else {
-                // Услуга передана через URL (inline-кнопка) — черновик уже создан на бэкенде
-                draftCreated = true;
+                // Услуга передана через URL (inline-кнопка)
                 document.getElementById('serviceTitle').innerText = selectedServiceName;
                 generateDateButtons();
             }
@@ -481,7 +479,6 @@
 
         function selectServiceFromMenu(serviceName) {
             selectedServiceName = serviceName;
-            draftCreated = false; // Сбрасываем флаг
 
             // Скрываем экран выбора услуги
             document.getElementById('serviceSelector').classList.remove('active');
@@ -492,35 +489,6 @@
             document.getElementById('dateSection').style.display = 'block';
 
             document.getElementById('serviceTitle').innerText = serviceName;
-
-            // ВАЖНО: Создаем черновик записи на бэкенде перед генерацией дат
-            // Это необходимо для корректной работы SetBookingDate в handleWebApp
-            const userID = tg.initDataUnsafe?.user?.id;
-            if (userID) {
-                // Отправляем запрос на создание черновика
-                fetch('/api/start-draft', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: userID,
-                        service_name: serviceName
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        console.log('✅ Черновик записи создан для услуги:', serviceName);
-                        draftCreated = true; // Устанавливаем флаг успешного создания
-                    } else {
-                        console.error('❌ Не удалось создать черновик');
-                        tg.showAlert('Ошибка создания черновика. Попробуйте снова.');
-                    }
-                })
-                .catch(err => {
-                    console.error('❌ Ошибка создания черновика:', err);
-                    tg.showAlert('Ошибка соединения с сервером.');
-                });
-            }
 
             generateDateButtons();
         }
@@ -690,28 +658,71 @@
                 return;
             }
 
-            // КРИТИЧНО: Проверяем, что черновик был создан
-            // При открытии через inline-кнопку (с параметром ?service=) черновик создается бэкендом
-            // При открытии через меню "Записаться" черновик создается через API /api/start-draft
-            if (!draftCreated) {
-                tg.showAlert("Ошибка: черновик записи не создан. Попробуйте выбрать услугу заново.");
+            if (!selectedServiceName) {
+                tg.showAlert("Ошибка: услуга не выбрана!");
+                return;
+            }
+
+            // Получаем данные пользователя из Telegram WebApp
+            const user = tg.initDataUnsafe?.user;
+            if (!user || !user.id) {
+                tg.showAlert("Ошибка: не удалось получить данные пользователя из Telegram!");
                 return;
             }
 
             // Показываем индикатор загрузки
             tg.MainButton.showProgress();
 
-            // Формируем строку в формате, который ожидает Go-обработчик
-            // Формат: "date|timeSlot|name|phone|comment"
-            const dataString = `${selectedDate}|${selectedTime}|${name}|${phone}|${comment}`;
+            // Формируем данные для отправки
+            const bookingData = {
+                serviceName: selectedServiceName,
+                date: selectedDate,
+                time: selectedTime,
+                userId: user.id,
+                name: name,
+                phone: phone,
+                comment: comment,
+                initData: tg.initData || ""
+            };
 
-            // Отправляем данные через Telegram WebApp API
-            tg.sendData(dataString);
+            // Отправляем AJAX-запрос на сервер
+            fetch('/api/book', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(bookingData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(text || 'Ошибка сервера');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Успешная запись
+                tg.MainButton.hideProgress();
 
-            // Закрываем WebApp после отправки
-            setTimeout(() => {
-                tg.close();
-            }, 300);
+                if (data.status === 'pending_confirmation') {
+                    // Запись требует подтверждения (есть существующая запись)
+                    tg.showAlert("Проверьте Telegram - требуется подтверждение замены записи");
+                } else {
+                    // Запись подтверждена
+                    tg.showAlert("Запись успешно создана! ✅");
+                }
+
+                // Закрываем WebApp
+                setTimeout(() => {
+                    tg.close();
+                }, 500);
+            })
+            .catch(error => {
+                console.error('Ошибка при записи:', error);
+                tg.MainButton.hideProgress();
+                tg.showAlert("Ошибка при записи: " + error.message);
+            });
         }
     </script>
 </body>

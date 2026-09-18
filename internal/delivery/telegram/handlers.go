@@ -229,7 +229,9 @@ func (h *Handlers) handleCallbackQuery(c tele.Context) error {
 	data := c.Callback().Data
 
 	// Отвечаем на callback сразу, чтобы кнопка не "висела" в загрузке
-	defer c.Respond()
+	if err := c.Respond(); err != nil {
+		log.Printf("⚠️ Ошибка ответа на callback: %v", err)
+	}
 
 	switch data {
 	case "my_bookings":

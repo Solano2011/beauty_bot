@@ -372,7 +372,10 @@ func Run(token string, adminID int64, db *postgres.DB, webAppURL string) {
 		// 1. Отдаем статические файлы (картинки) по пути /img/
 		http.Handle("/img/", http.StripPrefix("/img/", http.FileServer(http.Dir("./webapp/img"))))
 
-		// 2. Обрабатываем главную страницу через шаблонизатор
+		// 2. Отдаем статические файлы (CSS, JS) по пути /static/
+		http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+
+		// 3. Обрабатываем главную страницу через шаблонизатор
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/" {
 				http.NotFound(w, r)

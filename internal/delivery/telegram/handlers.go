@@ -62,17 +62,16 @@ func (h *Handlers) isAdmin(userID int64) bool {
 }
 
 func (h *Handlers) handleStart(c tele.Context) error {
-	caption := fmt.Sprintf(
-		"Добро пожаловать, *%s*! 🌸\n\n"+ // Заменили эмодзи на цветочек
-			"Я помогу вам записаться на процедуры к мастеру.\n"+
+	// Теперь это просто переменная с текстом (назовем ее text вместо caption)
+	text := fmt.Sprintf(
+		"Добро пожаловать, *%s*! 🌸\n\n"+
+			"Я помогу вам записаться к мастеру.\n"+
 			"Выберите действие из меню ниже:",
 		c.Sender().FirstName,
 	)
 
-	// Заменяем FromURL на FromDisk и прописываем путь к нашей новой картинке
-	photo := &tele.Photo{File: tele.FromDisk("static/img/welcome.jpg"), Caption: caption}
-
-	return c.Send(photo, BuildInlineMainMenu(h.webAppBaseURL), tele.ModeMarkdown)
+	// Отправляем текст напрямую, без привязки к фото
+	return c.Send(text, BuildInlineMainMenu(h.webAppBaseURL), tele.ModeMarkdown)
 }
 
 func (h *Handlers) handleBackToMain(c tele.Context) error {

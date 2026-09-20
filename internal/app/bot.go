@@ -365,7 +365,7 @@ func Run(token string, adminID int64, db *postgres.DB, webAppURL string) {
 			}
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(takenSlots)
+			json.NewEncoder(w).Encode(map[string][]string{"takenSlots": takenSlots})
 		})
 		// ---------------------------------------------
 

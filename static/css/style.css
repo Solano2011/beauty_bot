@@ -198,6 +198,10 @@ body {
     font-size: 18px;
     font-weight: 700;
     color: var(--text-main);
+    /* Добавляем эти 3 строчки, чтобы принудительно переносить текст: */
+    width: min-content;
+    margin: 0 auto;
+    line-height: 1.2; 
 }
 
 .date-chip.selected {

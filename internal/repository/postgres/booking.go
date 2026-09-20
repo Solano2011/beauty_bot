@@ -221,9 +221,9 @@ func (r *BookingRepo) GetTakenTimeSlots(ctx context.Context, date string, servic
 	rows, err := r.db.Conn.Query(ctx, `
         SELECT time_slot
         FROM bookings
-        WHERE date = $1 AND service_name = $2 AND status = 'confirmed'
+        WHERE date = $1 AND status = 'confirmed'
         ORDER BY time_slot`,
-		date, serviceName,
+		date,
 	)
 	if err != nil {
 		return nil, err

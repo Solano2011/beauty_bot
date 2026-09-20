@@ -99,10 +99,10 @@ function selectDate(dateStr, element) {
 }
 
 function updateTimeAvailability() {
-    if (!selectedDate || !selectedServiceName) return;
+    if (!selectedDate) return;
     const timePicker = document.getElementById('timePicker');
     timePicker.classList.add('active');
-    fetch('/api/availability?date=' + selectedDate + '&service=' + encodeURIComponent(selectedServiceName))
+    fetch('/api/availability?date=' + selectedDate)
         .then(response => response.json())
         .then(data => {
             const takenTimes = data.takenSlots || [];

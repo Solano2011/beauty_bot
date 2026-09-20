@@ -344,22 +344,16 @@ func Run(token string, adminID int64, db *postgres.DB, webAppURL string) {
 			}
 
 			date := r.URL.Query().Get("date")
-			serviceName := r.URL.Query().Get("service")
 
 			if date == "" {
 				http.Error(w, "Missing date parameter", http.StatusBadRequest)
 				return
 			}
 
-			if serviceName == "" {
-				http.Error(w, "Missing service parameter", http.StatusBadRequest)
-				return
-			}
-
 			ctx := context.Background()
-			takenSlots, err := repo.GetTakenTimeSlots(ctx, date, serviceName)
+			takenSlots, err := repo.GetTakenTimeSlots(ctx, date, "")
 			if err != nil {
-				log.Printf("❌ Ошибка получения занятых слотов для даты %s, услуги %s: %v", date, serviceName, err)
+				log.Printf("❌ Ошибка получения занятых слотов для даты %s: %v", date, err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}

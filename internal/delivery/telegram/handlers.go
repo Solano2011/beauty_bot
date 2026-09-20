@@ -63,13 +63,15 @@ func (h *Handlers) isAdmin(userID int64) bool {
 
 func (h *Handlers) handleStart(c tele.Context) error {
 	caption := fmt.Sprintf(
-		"Добро пожаловать, *%s*! 💅\n\n"+
+		"Добро пожаловать, *%s*! 🌸\n\n"+ // Заменили эмодзи на цветочек
 			"Я помогу вам записаться на процедуры к мастеру.\n"+
 			"Выберите действие из меню ниже:",
 		c.Sender().FirstName,
 	)
 
-	photo := &tele.Photo{File: tele.FromURL(ImgHeroUrl), Caption: caption}
+	// Заменяем FromURL на FromDisk и прописываем путь к нашей новой картинке
+	photo := &tele.Photo{File: tele.FromDisk("static/img/welcome.jpg"), Caption: caption}
+
 	return c.Send(photo, BuildInlineMainMenu(h.webAppBaseURL), tele.ModeMarkdown)
 }
 
@@ -390,4 +392,3 @@ func (h *Handlers) handleKeepOldBooking(c tele.Context) error {
 	_ = c.Delete()
 	return c.Send("👌 Вы отменили замену. Ваша старая запись остаётся в силе!", BuildInlineMainMenu(h.webAppBaseURL), tele.ModeMarkdown)
 }
-
